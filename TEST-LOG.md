@@ -105,3 +105,21 @@ Next: inspect the exact Rev.8 replay-player code, the URL returned by the playba
 | Instant Replay video display | UNRESOLVED | Recording existence and list discovery do not establish browser decode/render success. |
 
 **Next:** Record the exact status/wait text shown in the Instant Replay overlay after waiting about 20 seconds; then inspect browser Network/Console for the actual media request and decode errors. No repair yet. Production untouched. Duplicate `.mp4.mp4` remains separate.
+
+
+## 2026-11-07 — Instant Replay overlay status: “no completed recording found”
+
+**Source:** User's direct observation. **Test installation:** Rev.8 only. The application/replay window was already running; no restart was performed.
+
+| Check | Result | Detail |
+|---|---|---|
+| Instant Replay overlay status | FAIL — exact UI message | User reports the bottom of the window says **“no completed recording found”**. |
+| App/replay window state | RUNNING | User asked whether it should be closed/reopened and confirmed it was currently running. Assistant advised leaving it open. |
+| Recording file existence/data | PREVIOUSLY VERIFIED | Configured C: cam1 file existed at 478,547,112 bytes (~456 MiB). |
+| MediaMTX playback-list API | PREVIOUSLY VERIFIED PASS | Direct /list returned a non-empty cam1 span (duration 1,478.433 seconds). |
+| UI completed-recording lookup | UNRESOLVED | Exact request, path, time window, response parsing, and “completed” criteria have not yet been inspected. |
+| Production installation | UNTOUCHED | No production changes or service restarts. |
+
+### Next diagnostic step
+
+Find the exact source-code branch that emits “no completed recording found” in the current Rev.8 app.js/HTML. Trace the lookup request and compare it with the known successful MediaMTX /list response and Caddy /playback/list response. Check browser Network/Console only as needed to capture the actual request and response. Determine whether the UI is querying a different path, time range, or completed-recording condition. Do not make a speculative fix or restart the app/services. Do not modify production.
