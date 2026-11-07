@@ -203,3 +203,10 @@ The user supplied an explicit retraction from DeepSeek: its previous claim that 
 The arithmetic diagnosis remains independently testable against the supplied browser request/response and actual source, but DeepSeek's prior review is not independent confirmation of the project logs. DeepSeek now correctly asks for fresh on-disk Rev.8 excerpts before giving a final recommendation: `openInstantReplay()`, `listSpans()`, `mergeSpans()`, `playbackUrl()`, `loadSpan()`, and all `playbackUrl(` call sites.
 
 No code was changed, no services were restarted, and production was not touched. Next step is to obtain fresh source excerpts from `D:\JudoReplayKit_Rev8_Test\app\web\app.js` and ask DeepSeek to analyse only what is actually supplied.
+
+
+## 2026-11-07 — Rev.8 source extraction: initial search pattern did not match
+
+Read-only PowerShell output from the user confirms `D:\JudoReplayKit_Rev8_Test\app\web\app.js` exists (61,107 bytes; LastWriteTime 2026-11-06 14:56:44). However, the anchored regex looking only for conventional `function name(...)` declarations returned no matches for `openInstantReplay`, `listSpans`, `mergeSpans`, `playbackUrl`, or `loadSpan`. The search for `playbackUrl(` also returned no matches.
+
+Do not infer the functions are missing. The code may use assigned functions, object methods, different identifier spelling, or another structure. The command did not display source. Next step: broader identifier search with no function-declaration anchor and surrounding context. No files or services changed; production remains untouched.
