@@ -171,3 +171,26 @@ This is a concrete boundary mismatch indicated by the actual request and body, n
 ### Next diagnostic step
 
 Inspect current Rev.8 source to confirm the same pre-request now is used in the filter. Also inspect whether replay media loading consumes the JSON url (which omits /playback/) or uses the app's separate playbackUrl() builder (which reportedly creates /playback/get). Do not modify code, restart services, or touch production before the user approves a specific repair plan.
+
+
+## 2026-11-07 — Addendum: DeepSeek independent review and proposed next verification
+
+DeepSeek reports that it read PROJECT-LOG.md and TEST-LOG.md in full, then supplied an independent review. It agrees that a 2,000 ms tolerance is unsupported without evidence and that a fresh post-fetch timestamp alone is not a sufficient primary fix.
+
+### Main technical assessment
+
+The cam1 browser response recorded above has start 12:09:52.409Z and duration 301 s, giving an end of 12:14:53.409Z, exactly the request's end. The request was built with an end of captured `now + 1000 ms`; the supplied code excerpt filters spans using `s.end <= now + 350 ms`. If that is the same captured `now`, this observed span fails the filter by exactly 650 ms. This is a concrete boundary mismatch and a strong explanation for the “no completed recording found” error.
+
+DeepSeek also reviewed the supplied code excerpts for media URL handling: `listSpans()` maps only `start` and `duration`, discarding response `url`; the supplied `loadSpan()` excerpt calls the app's own `playbackUrl()`, which builds `/playback/get`. If these excerpts match current Rev.8 disk source, the returned JSON URL `/get` is not used by the app and is not the cause of the current no-span selection error. This source-path conclusion still needs current on-disk confirmation.
+
+### Qualification and next test
+
+Do not claim that every MediaMTX list response always ends exactly at the query end; only the one observed response proves that behavior for this request. The arithmetic is conclusive conditionally, but the exact current on-disk source and runtime timestamp identity have not yet been re-read/logged in this session.
+
+DeepSeek's minimal candidate fixes:
+1. Change request end from `now + 1000` to `now`, preserving the existing +350 ms acceptance filter; or
+2. Keep request end and align the acceptance threshold with the requested end.
+
+A fresh timestamp after fetch may be supplementary but is not a substitute for aligning the request and acceptance boundaries. No code change has been approved or made.
+
+**Required next diagnostic:** inspect the current Rev.8 on-disk implementations of `openInstantReplay()`, `listSpans()`, `playbackUrl()`, and the media-loading call site. Then present a minimal Rev.8-test-only repair plan and validation steps for user approval. Do not touch production, restart services, change ports/configuration/retention, or refactor unrelated code.
