@@ -211,3 +211,40 @@ DeepSeek now requests fresh on-disk excerpts for `openInstantReplay()`, `listSpa
 The user ran a read-only PowerShell check against `D:\JudoReplayKit_Rev8_Test\app\web\app.js`. The file exists and reports length 61,107 bytes, LastWriteTime 2026-11-06 14:56:44. The exact anchored search for conventional declarations matching `function openInstantReplay(...)`, `function listSpans(...)`, `function mergeSpans(...)`, `function playbackUrl(...)`, or `function loadSpan(...)` returned no matches. The separate `playbackUrl(` call-site search also returned no matches.
 
 This is only a search-pattern result. It does **not** establish that the functions/features are absent: they may be assigned to variables, declared as object methods, use different names/casing, or otherwise be structured differently. No source code was printed by this command. Next diagnostic is a broader, read-only search for the relevant identifiers without anchoring to `function`, with a few lines of context, then inspect the matching surrounding code. No files changed; no services restarted; production untouched.
+
+
+## 2026-11-07 — Fresh on-disk Rev.8 source confirms request/filter boundary mismatch
+
+The user supplied fresh PowerShell output from the actual file `D:\JudoReplayKit_Rev8_Test\app\web\app.js` (61,107 bytes; LastWriteTime 2026-11-06 14:56:44). This is direct source evidence from the isolated Rev.8 test installation.
+
+### Confirmed exact code and line numbers
+
+- Lines 255–268: `listSpans(path,start,end,signal)` requests `/playback/list`, parses each item into only `{ start, end }` using `Date.parse(x.start)` and `Number(x.duration)`; it does not preserve `x.url`.
+- Lines 270–275: `playbackUrl(path,start,duration)` builds `/playback/get?...&format=fmp4`.
+- Lines 276–284: `mergeSpans()` merges adjacent spans with a 350 ms gap threshold.
+- Lines 475–510: `loadSpan()` sets `v.src = playbackUrl(STREAMS[i], span.start, span.end - span.start)` at line 498. The visible excerpt confirms the app builds its own media URL rather than using the list response's `url`.
+- Lines 734–765: `openInstantReplay()`.
+  - Line 744 captures one `now = Date.now()`.
+  - Line 746 passes `new Date(now + 1000)` as the list request end.
+  - Line 754 filters using that same captured `now`: `s.end <= now + 350`.
+  - Line 756 throws “No completed recording found yet...” if no span passes.
+  - Lines 757–759 use `latestEnd` to calculate the requested replay range and call `loadReplay()`.
+- Line 1264 binds the Instant Replay button to `openInstantReplay`.
+- The broader identifier search also showed `fetchLatestRecordingEnd()` at lines 1136–1144 independently asks through `now + 2000`, then takes the latest span end without the same acceptance filter. This is a separate code path and should not be changed as part of a minimal Instant Replay repair unless evidence requires it.
+
+### Conclusions now directly confirmed
+
+1. The same captured `now` is used in request construction and filtering.
+2. Request end is `now + 1000 ms`.
+3. Acceptance boundary is `now + 350 ms`.
+4. The observed returned span ending exactly at request end is rejected by exactly 650 ms.
+5. `listSpans()` discards the response `url` field.
+6. `loadSpan()` calls the app's own `playbackUrl()`, which uses `/playback/get`.
+
+This substantially upgrades the time-boundary diagnosis: it is confirmed in current on-disk source, and the previously supplied browser response exhibits exactly the boundary behavior that triggers it. The conditional part remains that this specific response's end must be the one evaluated by this invocation; the observed request/response pair and code make that a strong causal explanation.
+
+### Still to inspect / cautions
+
+The user-provided output includes only the first portion of `loadSpan()` (through line 510), not its complete body. The exact current body of `loadReplay()` and full `loadSpan()` may be useful before final approval, but the current “no completed recording found” branch is reached before `loadReplay()` or media URL loading, so those details are not necessary to establish the boundary mismatch itself.
+
+Do not assume changing request end to `now` is automatically the safest final repair without considering MediaMTX's treatment of an active recording at the exact live edge. Compare the minimal alternatives and recommend a test-only change with clear reasoning. No code changed, no services restarted, production untouched.
