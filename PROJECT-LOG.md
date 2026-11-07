@@ -336,3 +336,17 @@ Recommended next design: Instant Replay should discover the latest available com
 - No code changes or service/configuration changes were made as part of this review.
 
 **Next decision gate:** Run read-only MediaMTX diagnostics for a 24-hour bounded query against cam1, measure response time, and if useful distinguish an unknown path from an existing path with no data. F0.1 (unbounded cam1 query: HTTP 200) and F0.2 (five-minute interval after archive end: HTTP 404) are already observed. F0.3–F0.5 remain to be tested. Do not implement until results are reviewed and the user approves the specific change. Production remains untouched.
+
+
+## 2026-11-07 — Addendum: Instant Replay archive lookback diagnostics completed
+
+**Source:** User-provided PowerShell output. **Environment:** Isolated Rev.8 test installation only.
+
+- A 24-hour bounded MediaMTX /list?path=cam1 query containing the known archive returned HTTP 200 in **30 ms**, with the expected recording span.
+- A five-minute query beginning after the known archive end returned HTTP 404.
+- A query for the nonexistent path cam_nonexistent returned HTTP 400 in **12 ms**.
+- These results distinguish a valid camera path with no recording in the requested interval (observed 404) from an invalid/nonexistent camera path (observed 400).
+- F0.3 (24-hour query with archive and timing), F0.4 (unknown path), and F0.5 (wide-query timing) are now complete. Together with the earlier F0.1/F0.2 results, the read-only diagnostic set is complete.
+- The five-minute lookFrom in openInstantReplay() remains the confirmed reason an older completed archive is not discovered after the camera has been offline for more than five minutes. A 24-hour bounded query is supported by the observed 30 ms response.
+- No change to listSpans() 404 handling is indicated by these tests. The proposed minimal repair is to widen only the openInstantReplay() discovery lookback from 5 minutes to 24 hours, leaving the selected replay duration and other code paths unchanged.
+- This is a diagnostic conclusion and proposed repair; the 24-hour lookback code change has **not** yet been applied. Production remains untouched.
