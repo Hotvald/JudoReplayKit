@@ -167,3 +167,29 @@ Independent review: the stale-time hypothesis is plausible, but the supplied evi
 - The cam1 HTTP 200 response proves the browser receives a non-empty JSON list; it does not alone prove the replay player decodes or displays the media.
 
 **Next:** Inspect the exact current Rev.8 openInstantReplay() and media URL selection path. Confirm whether the span end is compared against the same pre-request now, and whether the player uses the returned url or the app's own /playback/get builder. Do not change code until the user approves a repair plan. Production remains untouched.
+
+
+## 2026-11-07 — Addendum: independent DeepSeek review of Instant Replay failure
+
+The user supplied an independent technical review from DeepSeek after it reported reading both project logs in full (PROJECT-LOG.md, 238 lines; TEST-LOG.md, 186 lines at the time of its review). DeepSeek independently agreed that the 2,000 ms tolerance proposed earlier was not justified without measurement and that a fresh post-fetch timestamp alone would not reliably resolve the observed boundary mismatch.
+
+### DeepSeek's main conclusions
+
+- It identifies the mismatch between the list request end (captured `now + 1000 ms`) and the acceptance filter (`s.end <= now + 350 ms`). In the supplied cam1 response, the returned span end equals the request end exactly, which places that span 650 ms beyond the acceptance limit if the same captured `now` is used for both.
+- It concludes that this arithmetic explains why that returned span is rejected and why the “no completed recording found” branch can be reached.
+- It argues that changing only to a fresh `Date.now()` after the fetch is insufficient unless at least 650 ms has elapsed; localhost response time may be shorter.
+- It reports that the supplied Rev.8 source excerpts show `listSpans()` discarding the response `url` property and `loadSpan()` using the app's own `playbackUrl()` builder, so the returned `/get` URL is not the current app's media URL path. This makes the Caddy `/get` vs `/playback/get` discrepancy unlikely to explain the current “no completed recording found” branch.
+
+### Independent assessment / qualifications retained
+
+The boundary mismatch is strongly supported by the exact browser request and response already logged. It is mathematically certain that a span ending at requestEnd = capturedNow + 1000 ms fails a filter of capturedNow + 350 ms. However, do not generalize that every response must end at the query boundary: only the supplied cam1 response is observed. The local source excerpts have not yet been independently re-read from the current Rev.8 disk files in this session. Therefore:
+- Verified browser fact: this observed span ended exactly at the request end.
+- Conditional arithmetic: if the same captured `now` feeds both request construction and filtering, this observed span is rejected by 650 ms.
+- Strong diagnosis, not yet full runtime proof: this explains the observed error path.
+- Reported code fact, pending current on-disk confirmation: the app ignores response `url` and builds `/playback/get` itself.
+
+DeepSeek proposed two minimal candidate alignments: (A) request list through captured `now` rather than `now + 1000`, preserving the existing +350 ms filter; or (B) keep the request end and align the acceptance threshold to it. It regarded a fresh post-fetch timestamp as supplementary, not the primary fix. No option is approved or implemented.
+
+### Next step
+
+Before any edit, independently inspect the exact current Rev.8 source on disk: `openInstantReplay()`, `listSpans()`, `playbackUrl()`, and the media-loading call site. Then propose a minimal test-only repair plan with explicit rationale and validation. Do not touch production, restart services, change ports/configuration/retention, or refactor unrelated code. No code changed as part of this review.
