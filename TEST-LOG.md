@@ -139,3 +139,35 @@ Find the exact source-code branch that emits “no completed recording found” 
 | Production / running services | UNCHANGED | No code, config, or process changes. |
 
 **Next:** Obtain the exact current Rev.8 `openInstantReplay()` implementation and the actual `/playback/list` JSON response plus request timing for one failing attempt. Calculate `s.end` and compare against both pre-request and post-response browser timestamps. Only then decide whether a minimal code change is justified. Do not restart the app or services.
+
+
+## 2026-11-07 — Browser Network check: cam1 list succeeds, cam2 list returns 404
+
+**Source:** User-provided DevTools Network details and copied cam1 Response JSON. **Test installation:** Rev.8 only. No code/configuration or service changes.
+
+| Check | Result | Detail |
+|---|---|---|
+| cam1 /playback/list | PASS | HTTP 200. |
+| cam1 response body | PASS — non-empty | One item: start 2026-11-07T12:09:52.409Z, duration 301 seconds. |
+| cam1 request range | OBSERVED | URL start 12:09:52.409Z, end 12:14:53.409Z UTC. |
+| cam1 span end calculation | EXACT MATCH | Start + 301 seconds = 12:14:53.409Z, exactly the request's end boundary. |
+| cam1 returned media URL | PATH MISMATCH CANDIDATE | Response URL is http://localhost:8081/get?... , without /playback/. Earlier direct test found Caddy /get returns 404 and /playback/get returns 200. Whether app.js uses the response URL remains unverified. |
+| cam2 /playback/list | HTTP 404 | Consistent with previously observed cam2 not sending/no source; does not imply cam1 failure. |
+| cam2 HLS playlist | HTTP 404 | Same offline-camera context; not evidence of cam1 failure. |
+| Instant Replay status | STILL FAILING | User had reported “no completed recording found”. |
+
+### Updated assessment of the time-filter hypothesis
+
+The supplied current request and response make the filter issue substantially more likely than the earlier generic latency explanation:
+
+- openInstantReplay() constructs the query end as new Date(now + 1000).
+- The browser request's end is 12:14:53.409Z.
+- The returned span starts at 12:09:52.409Z and has duration exactly 301 seconds, so its calculated s.end is 12:14:53.409Z.
+- The supplied code accepts only s.end <= now + 350.
+- If the now used to construct the request is the same captured now used by the filter, the returned span is at now + 1000 and is rejected by 650 ms.
+
+This is a concrete boundary mismatch indicated by the actual request and body, not just a hypothetical >700 ms network delay. It strongly supports why cam1 contributes no accepted span and why the “no completed recording found” branch is reached. However, the exact current local source and runtime timestamp values have not yet been independently re-read/logged in this chat; do not silently upgrade this to absolute proof.
+
+### Next diagnostic step
+
+Inspect current Rev.8 source to confirm the same pre-request now is used in the filter. Also inspect whether replay media loading consumes the JSON url (which omits /playback/) or uses the app's separate playbackUrl() builder (which reportedly creates /playback/get). Do not modify code, restart services, or touch production before the user approves a specific repair plan.
