@@ -260,3 +260,23 @@ Qualifications:
 - fetchLatestRecordingEnd() (request through now + 2000, no matching acceptance filter) is a separate potential issue, not observed failing; leave unchanged pending evidence.
 
 No implementation approval or code edit is recorded here. Any test must be limited to D:\JudoReplayKit_Rev8_Test. Production D:\JudoReplayKit, services, ports, MediaMTX/Caddy configuration, and retention settings remain untouched.
+
+
+## 2026-11-07 — Rev.8 Option A boundary correction applied (test pending)
+
+**Source:** User-provided PowerShell output. **Test installation:** `D:\JudoReplayKit_Rev8_Test` only.
+
+| Check | Result | Detail |
+|---|---|---|
+| User approval | PASS | User explicitly approved the one-line Option A test change. |
+| Target file | PASS | `D:\JudoReplayKit_Rev8_Test\app\web\app.js`. |
+| Pre-change backup | PASS | `app.js.backup_before_optionA_20261107-133909` created beside app.js. |
+| Expected old expression | PASS | Script found exactly one occurrence of the `now + 1000` list-end expression. |
+| Replacement | PASS | Changed only request end from `new Date(now + 1000)` to `new Date(now)`; retained the existing `s.end <= now + 350` acceptance filter. |
+| Post-write verification | PASS | Script confirmed the new expression exists and the old expression is absent. |
+| Production installation | UNTOUCHED | Script explicitly reported production was not touched. |
+| Browser reload / Instant Replay | NOT YET TESTED | No functional result has been supplied yet. |
+| Video decode / visible replay frames | NOT YET VERIFIED | Source edit alone does not prove playback. |
+| Recording continuity during replay | NOT YET VERIFIED | Requires before/after file-size or equivalent observation during the test. |
+
+**Next test:** Reload only the Rev.8 test page (hard refresh), verify live remains visible, click Instant Replay once, and record the new list request/response, `[JUDO-DIAG][instant]` lag, overlay status, and whether actual frames appear. Do not restart services, alter config/retention, or touch production.
