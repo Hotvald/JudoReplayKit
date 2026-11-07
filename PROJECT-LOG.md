@@ -141,3 +141,14 @@ No files/configuration were modified; production remains protected.
 - The app was not closed or restarted for this observation. No services, files, or configuration were changed. Production remains untouched.
 
 **Next diagnostic task:** Trace the exact code path that produces “no completed recording found”. Inspect the current Rev.8 app.js and HTML for the status string and the completed-recording/list lookup. Compare its request URL, path, query parameters, time window, response parsing, and completion criteria with the already successful direct MediaMTX /list response and Caddy /playback/list response. Use browser Network/Console evidence if needed. Establish why the UI's completed-recording lookup finds nothing before proposing a repair. Do not restart services, change code/config, or touch production without approval.
+
+
+## 2026-11-07 — External AI diagnosis: possible `openInstantReplay()` time-window race
+
+**Source:** Diagnosis supplied by the user's second AI assistant; independently reviewed in this ChatGPT session. **Status: HYPOTHESIS — NOT VERIFIED; repair not approved or applied.**
+
+The second AI identifies the `openInstantReplay()` selection condition `s.end <= now + 350` as a possible cause of the UI message “no completed recording found”. Its proposed explanation is that `now` is captured before asynchronous `/playback/list` requests, so the returned span end may be later than the stale `now + 350` cutoff. It proposes calculating a fresh `Date.now()` after `Promise.all()` resolves and increasing the tolerance to 2,000 ms.
+
+Independent review: the stale-time hypothesis is plausible, but the supplied evidence does not prove it. The previously recorded span start `2026-11-07T12:31:46.615665+01:00` plus duration `1478.433` seconds yields an end around `12:56:25.048+01:00`. That timestamp must be compared with the actual Instant Replay click time and actual list-response time; it cannot be assumed to be in the future. A fresh timestamp after fetch is a reasonable defensive change, but the 2,000 ms tolerance needs justification from measured values and should not mask a clock/time-range or span-selection problem.
+
+**Decision:** Do not approve or apply the code change yet. First capture the actual `/playback/list` response and compare its calculated `s.end` with the browser's `Date.now()` at click time and after the request resolves. Inspect the exact current Rev.8 code and verify how `s.end` is calculated. Production remains protected; no code/configuration or services changed.
