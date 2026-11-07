@@ -33,6 +33,41 @@ Test installation: isolated Rev.8 environment.
 
 **Important qualification:** The picture-visible result above is a direct user observation, not an independent measurement by the assistant. No claim is made here that recording, HLS segments, or replay are working.
 
+## 2026-11-07 — Additive correction to startup record
+
+A previous draft stated that the mobile stream had been started during this test. That statement was stronger than the latest user confirmation supported and is qualified in the project log. The original wording remains visible in Git history.
+
+## 2026-11-07 — Recording and playback endpoint verification
+
+**Source:** User-provided PowerShell output and direct UI observation.  
+**Test installation:** `D:\JudoReplayKit_Rev8_Test`. Production installation was not modified.
+
+| Check | Result | Detail |
+|---|---|---|
+| MediaMTX process | PASS | Process PID 1368 was present in the check. |
+| Caddy process | PASS | Process PID 11792 was present in the check. |
+| Test ports | PASS | 1936, 8081, 8889, 8890, 9995, 9998 and 9999 all returned TCP True. |
+| cam1 recording file | PASS — growth observed | File `2026-11-07_12-31-46-615665.mp4.mp4` was first seen at 0 bytes, then later at 113,620,191 bytes; LastWriteTime 12:37:36. |
+| cam1 path status | PASS | MediaMTX API: `ready=True`, source type `rtmpConn`; one HLS reader. |
+| cam2 path status | EXPECTED NOT READY | `ready=False`, no source and no readers. |
+| MediaMTX playback list | PASS | `http://127.0.0.1:9995/list?path=cam1` returned HTTP 200 and one recording, start 12:31:46.615665+01:00, duration 636.333 seconds. |
+| Caddy playback list | PASS — list only | `http://127.0.0.1:8081/playback/list?path=cam1` returned HTTP 200 and the same recording entry. |
+| Direct MediaMTX media GET | PASS — response headers | `/get?... ` returned HTTP 200, Content-Type `video/mp4`. |
+| Caddy media GET | PASS — response headers | `/playback/get?... ` returned HTTP 200, Content-Type `video/mp4`. |
+| Caddy path without prefix | FAIL — expected route mismatch | `http://127.0.0.1:8081/get?... ` returned HTTP 404. |
+| MP4 data read through Caddy | PASS | 1,024 bytes read; leading bytes `00 00 00 20 66 74 79 70 6D 70 34 32` match an MP4 `ftypmp42` header. |
+| Instant Replay UI | FAIL — no picture | User reports replay window opens but no video appears. After closing it, live picture is still visible. |
+| Recording while replay window open | NOT INDEPENDENTLY VERIFIED | UI message says replay does not affect recording; user sees live picture again after closing replay. No separate file-growth measurement was made during the replay-window interval. |
+| Duplicate file extension | FAIL | Observed filename ends in `.mp4.mp4`. |
+
+### Interpretation and next action
+
+The recording file contains written data, MediaMTX lists it, and both direct MediaMTX `/get` and Caddy `/playback/get` return MP4 data. Therefore, the black replay window is not explained by a missing recording alone.
+
+A path mismatch is a concrete candidate: the Caddy playback-list response returns a media URL on `http://127.0.0.1:8081/get?... ` (without `/playback/`), while the tested working Caddy media route is `/playback/get`; the unprefixed route returns 404. This has not yet been proven to be the exact cause of the replay player's failure.
+
+Next: inspect the exact Rev.8 replay-player code, the URL returned by the playback-list API, and the browser's media error/console behavior. Do not change production, stop running services, or assume the replay-player fix before inspecting current files.
+
 ## Test discipline
 
 - Do not repeat these checks without a concrete reason, such as a relevant code/configuration change or a newly observed regression.
