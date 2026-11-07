@@ -271,3 +271,22 @@ Important qualifications retained:
 5. fetchLatestRecordingEnd() may have a related future-boundary concern because it requests through now + 2000 and takes the latest end without the same filter, but no failure is observed there; do not change it speculatively.
 
 DeepSeek's proposed test remains strictly in D:\JudoReplayKit_Rev8_Test, with browser reload and observation of the request, diagnostic lagMs, rendered frames, live picture, and recording-file growth. Production D:\JudoReplayKit must remain untouched. No code changed, no services restarted, and no runtime configuration or retention policy changed during this assessment.
+
+
+## 2026-11-07 — Rev.8 Option A boundary correction applied
+
+**Source:** User-provided PowerShell output. **Environment:** Isolated test installation only.
+
+The user explicitly approved the one-line Option A change. The PowerShell script reported:
+
+- `OPTION A APPLIED`
+- Backup created: `D:\JudoReplayKit_Rev8_Test\app\web\app.js.backup_before_optionA_20261107-133909`
+- Exactly the intended old expression was replaced:
+  - Before: `listSpans(STREAMS[i], new Date(lookFrom), new Date(now + 1000), signal).then(mergeSpans)`
+  - After: `listSpans(STREAMS[i], new Date(lookFrom), new Date(now), signal).then(mergeSpans)`
+- The script verified the new expression is present and the old expression is absent.
+- The script states that only the intended line was changed and the production installation was not touched.
+
+**Status:** The source edit and backup are confirmed by the user's PowerShell output. Browser reload and functional Instant Replay validation have **not yet been performed**. This change only addresses the previously identified span-selection boundary mismatch; it does not establish that replay video will decode or that pause/frame-step/live independence are fixed.
+
+**Next:** Review this output, then reload only the Rev.8 test web page and run the narrowly scoped Instant Replay test. Capture the new `/playback/list` request end, response body, `[JUDO-DIAG][instant]` lag value, replay status, and whether actual frames appear. If possible, compare the active recording file size before/after replay to verify recording continuity. Do not restart services or modify production.
