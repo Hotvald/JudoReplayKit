@@ -68,15 +68,18 @@ AI assistants that cannot write to GitHub can still participate: the user can pa
 
 **Source:** User report in the JudoReplayKit project conversation.  
 **Environment:** Isolated Rev.8 test installation only.  
-**Status:** Test servers were started successfully; the user confirmed that JudoReplayKit was running and that the live picture was visible.
+**Status:** Test servers were started successfully; the user reported that JudoReplayKit was running and that the picture was visible.
 
 Recorded facts:
 - The Rev.8 start script opened the test application in the browser.
 - The user confirmed: “det kører og, jeg kan se det” (it is running and I can see it).
 - The test installation's seven configured ports had previously been reported listening, and the test web endpoint returned HTTP 200.
-- This entry records visible live video as a user observation. It does **not** yet verify recording-file growth, HLS segment playback, instant replay, pause, frame stepping, bookmarks, or zoom in this session.
-- The mobile stream was started for this test at the user's direction in the preceding test instructions; no second camera test has been recorded here.
+- This entry records the user's observation that the picture was visible. It does **not** independently verify recording-file growth, HLS segment playback, instant replay, pause, frame stepping, bookmarks, or zoom in this session.
+- The exact mobile-stream start action was not separately reconfirmed in the user's latest message; do not infer any additional camera or recording state from that message alone.
 - Production installation and its processes were not changed.
 
-**Next test step:** While the mobile camera stream remains active, verify that a new recording file is created in the Rev.8 test recording location and that its size increases. Then test HLS playlist and segment delivery before proceeding to replay controls.
+**Next test step:** Confirm the mobile stream is still active, then verify that a new recording file is created in the Rev.8 test recording location and that its size increases. Then test HLS playlist and segment delivery before proceeding to replay controls.
 
+## 2026-11-07 — Additive correction to this session record
+
+A previous draft of this entry stated that the mobile stream had been started during this test. That statement was stronger than the latest user confirmation supports and is therefore explicitly qualified above. The original draft is preserved in the Git commit history; this correction does not erase the earlier wording.
