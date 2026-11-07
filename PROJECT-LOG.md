@@ -102,3 +102,17 @@ This addendum supersedes the earlier “not yet verified” statements for recor
 - Duplicate extension observed in the recording filename: `.mp4.mp4`.
 
 **Current diagnosis:** Recording data exists and the playback HTTP endpoint can return MP4 data. The remaining immediate failure is end-to-end video display in the replay player. Inspect the exact Rev.8 replay-player code and URL handling before making a repair. Do not alter production or restart running services as part of diagnosis.
+
+
+## 2026-11-07 — Addendum: replay-list body and storage-path clarification
+
+**Source:** User-provided PowerShell output. **Environment:** Rev.8 test investigation only.
+
+- The current test config reports `recordSegmentDuration: 1h`, `recordFormat: fmp4`, and a `recordPath` under `C:\\JudoReplayKit_Rev8_Test\\Videos\\%path\\...`.
+- Contrary to the leading hypothesis that a one-hour segment setting leaves the playback list empty, the actual MediaMTX playback-list body was **not empty**. Direct request to `http://127.0.0.1:9995/list?path=cam1...` returned one span: start `2026-11-07T12:31:46.615665+01:00`, duration `1478.433` seconds (about 24m 38s).
+- The Caddy list route returned the same span and a generated URL beginning `http://127.0.0.1:8081/get?... `. The unprefixed Caddy `/get` route was previously verified as 404, while `/playback/get` is the working route. This mismatch remains a candidate, but app.js has a separate `playbackUrl()` builder for `/playback/get`; inspect actual browser requests before concluding it causes the UI failure.
+- The user's file listing command enumerated `D:\\JudoReplayKit_Rev8_Test\\Videos`, but the active config's `recordPath` points to `C:\\JudoReplayKit_Rev8_Test\\Videos`. The four files shown in the D: listing are older Nov 6 files. They do not establish whether the currently configured C: test recording folder contains the active Nov 7 recording. Check the C: path separately.
+- Therefore, the hypothesis “one-hour segments cause /list to return an empty array” is **disproved for this observed request**. A valid span is returned. The remaining immediate task is to inspect the replay overlay's status text and browser Network/Console evidence to determine whether `/playback/get` is requested and whether a frame is decoded.
+- The duplicate `.mp4.mp4` filename remains a separate confirmed configuration defect; no correction has been applied.
+
+No code or configuration was changed. Production remains protected.
