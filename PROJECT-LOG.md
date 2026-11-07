@@ -290,3 +290,28 @@ The user explicitly approved the one-line Option A change. The PowerShell script
 **Status:** The source edit and backup are confirmed by the user's PowerShell output. Browser reload and functional Instant Replay validation have **not yet been performed**. This change only addresses the previously identified span-selection boundary mismatch; it does not establish that replay video will decode or that pause/frame-step/live independence are fixed.
 
 **Next:** Review this output, then reload only the Rev.8 test web page and run the narrowly scoped Instant Replay test. Capture the new `/playback/list` request end, response body, `[JUDO-DIAG][instant]` lag value, replay status, and whether actual frames appear. If possible, compare the active recording file size before/after replay to verify recording continuity. Do not restart services or modify production.
+
+## 2026-11-07 — Rev.8 replay search window excludes stopped-camera recordings
+
+**Source:** User-provided PowerShell output and source inspection. **Environment:** Rev.8 test installation only.
+
+The user observed that Instant Replay once displayed a short sequence with status "Replay loaded", but after a browser refresh it reported "No completed recording found". The user also reported that replay controls seemed unresponsive; scroll-wheel zoom and image panning did work.
+
+Verified source facts:
+- `openInstantReplay()` sets `durationSel` from `replayWindowSelect`, defaulting to 15000 ms (15 seconds).
+- It sets `lookFrom = now - 5 * 60 * 1000`, so archive discovery is limited to the preceding five minutes.
+- The list request uses the captured current time as its end (the previously approved Option A change is present).
+- A span is selected only if its end is within the existing acceptance threshold; if none is selected, the code throws "No completed recording found yet" before calling `loadReplay()`.
+- The user tested the same five-minute interval at 2026-11-07 13:49:51 +01:00. It covered 13:44:51–13:49:51 and returned HTTP 404.
+- The latest CAM1 archive found by the unbounded list request starts at 12:31:46.615665 +01:00 and has duration 4110.145528 seconds, ending at approximately 13:40:16.761. The five-minute query therefore started about 4 minutes 34 seconds after the recorded span ended.
+- The unbounded `/list?path=cam1` returned HTTP 200 and the archive span, confirming the recording is still indexed and discoverable.
+
+Conclusion: The five-minute lookback is sufficient to explain why Instant Replay cannot find a completed recording after the camera has been off for more than five minutes. This is a separate limitation from the earlier Option A request-end boundary correction. The 15-second value is the requested replay-window length, not the total archive duration.
+
+Not yet established:
+- Whether the first visible replay was exactly 15 seconds.
+- Whether play/pause/frame-step controls function.
+- Whether replay playback works reliably across the full archive span.
+- Whether live streaming and recording remain unaffected during replay.
+
+Recommended next design: Instant Replay should discover the latest available completed span even when the camera is no longer streaming, rather than limiting archive discovery to the last five minutes. Define a safe bounded archive-search horizon or query the archive index for the latest span; avoid loading the entire archive as the replay clip. Any implementation change requires explicit user approval and must be tested only in `D:\\JudoReplayKit_Rev8_Test`. Production `D:\\JudoReplayKit` remains untouched. No code was changed and no services were restarted during this test.
