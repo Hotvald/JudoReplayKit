@@ -90,3 +90,18 @@ Next: inspect the exact Rev.8 replay-player code, the URL returned by the playba
 | Replay video rendering | STILL FAILING / UNRESOLVED | Need overlay status text and browser Network/Console evidence to see whether app requests `/playback/get`, receives data, and decodes frames. |
 
 **Next diagnostic step:** Check the configured C: recording folder, then inspect the replay overlay's exact status and DevTools Network/Console while opening Instant Replay. Do not modify files until the request/decode path is identified. The `.mp4.mp4` naming issue remains separate and unmodified.
+
+
+## 2026-11-07 — Active C: recording folder check
+
+**Source:** User-provided PowerShell output. **Test installation:** Rev.8 only.
+
+| Check | Result | Detail |
+|---|---|---|
+| Active configured recording folder | PASS | User checked `C:\\JudoReplayKit_Rev8_Test\\Videos`, matching `recordPath` in the active config. |
+| Current cam1 recording file | PASS — exists | `cam1\\2026-11-07_12-31-46-615665.mp4.mp4`. |
+| Current cam1 recording size | PASS — substantial data | 478,547,112 bytes (about 456 MiB). |
+| Recording discoverable via playback list | PASS | Earlier actual list body contained a cam1 span of 1,478.433 seconds. |
+| Instant Replay video display | UNRESOLVED | Recording existence and list discovery do not establish browser decode/render success. |
+
+**Next:** Record the exact status/wait text shown in the Instant Replay overlay after waiting about 20 seconds; then inspect browser Network/Console for the actual media request and decode errors. No repair yet. Production untouched. Duplicate `.mp4.mp4` remains separate.
