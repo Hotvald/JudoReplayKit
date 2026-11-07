@@ -116,3 +116,16 @@ This addendum supersedes the earlier “not yet verified” statements for recor
 - The duplicate `.mp4.mp4` filename remains a separate confirmed configuration defect; no correction has been applied.
 
 No code or configuration was changed. Production remains protected.
+
+
+## 2026-11-07 — Addendum: active C: recording folder verified
+
+**Source:** User-provided PowerShell output. **Environment:** Rev.8 test only.
+
+- The active MediaMTX config points to `C:\\JudoReplayKit_Rev8_Test\\Videos\\...`.
+- The user has now listed that exact C: folder and found `C:\\JudoReplayKit_Rev8_Test\\Videos\\cam1\\2026-11-07_12-31-46-615665.mp4.mp4`, size **478,547,112 bytes** (about 456 MiB).
+- This confirms the active Rev.8 recording file exists at the configured storage location and contains substantial written data.
+- Together with the non-empty MediaMTX playback-list response, this confirms that recording data exists and is discoverable by the playback-list API. It does not yet prove browser playback or decoded video frames.
+- Duplicate `.mp4.mp4` suffix remains a separate defect and has not been changed.
+
+No files/configuration were modified; production remains protected.
