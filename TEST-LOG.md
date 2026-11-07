@@ -346,3 +346,20 @@ DeepSeek's full independent Rev.8 review was supplied by the user. It explicitly
 - Verify complete loadSpan/loadReplay source before claiming the 15/30-second media request path is fully correct; previously supplied loadSpan excerpt was partial.
 
 **No code was changed and no services were restarted during the review.** The next step is a read-only 24-hour cam1 list query with response-time measurement. Production remains untouched.
+
+
+## 2026-11-07 — F0 archive discovery diagnostics completed
+
+**Environment:** D:\\JudoReplayKit_Rev8_Test. **Source:** User-provided PowerShell output. Read-only tests; no code/configuration or service changes.
+
+| Test | Result | Evidence |
+|---|---|---|
+| F0.1 Unbounded cam1 list | PASS | HTTP 200; known archive span returned. |
+| F0.2 Five-minute interval after archive end | PASS — reproduces no-data case | HTTP 404; requested interval began after the archive ended. |
+| F0.3 24-hour bounded cam1 list | PASS | HTTP 200; known archive span returned; response time 30 ms. |
+| F0.4 Unknown camera path (cam_nonexistent) | PASS — invalid path distinguished | HTTP 400; response time 12 ms. |
+| F0.5 Wide-query timing | PASS | 24-hour query completed in 30 ms. |
+
+**Interpretation:** The 24-hour query is a viable bounded discovery window in this observed test. MediaMTX returned 404 for a valid cam1 path with no recording in the requested five-minute interval, but 400 for a nonexistent path. Do not change listSpans() error handling on the basis of these results. The confirmed five-minute lookFrom is the separate reason an older archive is missed.
+
+**Proposed minimal repair (not yet applied):** Change only lookFrom = now - 5 * 60 * 1000 to a 24-hour lookback in openInstantReplay() in the Rev.8 test installation. Keep the selected replay-window duration, listSpans(), fetchLatestRecordingEnd(), playback functions, configuration, retention, and services unchanged. Validate after a hard browser refresh with the camera offline and an archive older than five minutes. Production remains untouched.
