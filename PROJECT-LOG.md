@@ -248,3 +248,26 @@ This substantially upgrades the time-boundary diagnosis: it is confirmed in curr
 The user-provided output includes only the first portion of `loadSpan()` (through line 510), not its complete body. The exact current body of `loadReplay()` and full `loadSpan()` may be useful before final approval, but the current “no completed recording found” branch is reached before `loadReplay()` or media URL loading, so those details are not necessary to establish the boundary mismatch itself.
 
 Do not assume changing request end to `now` is automatically the safest final repair without considering MediaMTX's treatment of an active recording at the exact live edge. Compare the minimal alternatives and recommend a test-only change with clear reasoning. No code changed, no services restarted, production untouched.
+
+## 2026-11-07 — Independent second-AI assessment of Rev.8 Instant Replay boundary mismatch
+
+The user supplied a full independent technical assessment from DeepSeek. DeepSeek explicitly stated it could not access GitHub in that session and had not read either repository log; its assessment was based only on the fresh Rev.8 source excerpts and previously supplied browser Network evidence. This limitation is recorded rather than presenting its review as repository inspection.
+
+DeepSeek independently re-derived the same boundary mismatch:
+- openInstantReplay() captures one `now`.
+- The /playback/list request ends at `now + 1000 ms`.
+- The acceptance filter rejects any span ending after `now + 350 ms`.
+- The observed cam1 response ended exactly at the request end, so it falls 650 ms beyond the acceptance boundary.
+- When no span passes, the error is thrown before loadReplay() or media loading.
+- The response's `url` is discarded by listSpans(); the shown media-loading path builds its own `/playback/get` URL. Thus the Caddy `/get` mismatch does not explain this particular no-span error.
+
+DeepSeek recommends the one-line, isolated Rev.8 candidate: change the list request end from `new Date(now + 1000)` to `new Date(now)`, leaving the existing `s.end <= now + 350` filter unchanged. Its reasoning is that this bounds returned spans at or before the captured client time and avoids widening acceptance into a possible future/unwritten tail. It rejects a fresh Date.now() after fetch as an adequate standalone fix.
+
+Important qualifications retained:
+1. The observed request/response pair proves one span ended at the request boundary; it does not establish that MediaMTX always clamps spans this way.
+2. Option A is a proposed test-only correction, not yet applied or approved. Active-recording/live-edge behavior and any clock/write lag still require runtime validation.
+3. This diagnosis explains the specific “No completed recording found yet” branch; it does not prove all replay/player defects are solved.
+4. mergeSpans() 350 ms adjacency tolerance is separate and should not be changed.
+5. fetchLatestRecordingEnd() may have a related future-boundary concern because it requests through now + 2000 and takes the latest end without the same filter, but no failure is observed there; do not change it speculatively.
+
+DeepSeek's proposed test remains strictly in D:\JudoReplayKit_Rev8_Test, with browser reload and observation of the request, diagnostic lagMs, rendered frames, live picture, and recording-file growth. Production D:\JudoReplayKit must remain untouched. No code changed, no services restarted, and no runtime configuration or retention policy changed during this assessment.
