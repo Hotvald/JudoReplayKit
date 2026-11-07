@@ -363,3 +363,28 @@ DeepSeek's full independent Rev.8 review was supplied by the user. It explicitly
 **Interpretation:** The 24-hour query is a viable bounded discovery window in this observed test. MediaMTX returned 404 for a valid cam1 path with no recording in the requested five-minute interval, but 400 for a nonexistent path. Do not change listSpans() error handling on the basis of these results. The confirmed five-minute lookFrom is the separate reason an older archive is missed.
 
 **Proposed minimal repair (not yet applied):** Change only lookFrom = now - 5 * 60 * 1000 to a 24-hour lookback in openInstantReplay() in the Rev.8 test installation. Keep the selected replay-window duration, listSpans(), fetchLatestRecordingEnd(), playback functions, configuration, retention, and services unchanged. Validate after a hard browser refresh with the camera offline and an archive older than five minutes. Production remains untouched.
+
+
+## 2026-11-07 — Rev.8 archive discovery and playback follow-up (addendum)
+
+**Environment:** Isolated `D:\\JudoReplayKit_Rev8_Test`; mobile camera OFF. Production untouched.
+
+| Test / observation | Result | Interpretation |
+|---|---|---|
+| Guarded 24-hour lookback edit in `app.js` | PASS | New 24-hour expression present; old 5-minute expression absent. Backup: `app.js.backup_before_24h_20261107-140415`. |
+| Browser cam1 `/playback/list` after hard refresh | HTTP 200 | Request covered 24 hours and returned the known archived cam1 span (~68m30s). Confirms browser loaded updated code and Caddy list proxy works. |
+| Browser cam2 `/playback/list` | HTTP 404 | Expected: no cam2 recording while camera is off. |
+| Browser cam1 `/playback/get` | HTTP 200 | Requested fMP4, duration 25.001s. HTTP success did not prevent UI from showing “Playback failed”. |
+| Instant Replay after later use | Inconsistent | User reports replay video disappeared after a period; after hard browser refresh replay loaded again. |
+| Frame-by-frame | FAIL (user observation) | Frame-step control does not work. |
+
+**Important distinction:** The earlier 404 caused by the five-minute discovery window is addressed in the isolated test app. The present failure is downstream of successful archive listing and a successful HTTP playback response. A 200 response is not proof that the media payload is valid/decodable.
+
+**Next diagnostics only (no code changes yet):**
+1. Inspect the cam1 playback GET response headers (especially Content-Type, Content-Length, Content-Range) and transferred size.
+2. Inspect browser Console for media errors and the video element's error/readiness state.
+3. Inspect why the generated replay request is 25.001 seconds when the user selected 15 seconds.
+4. Separately inspect replay-window disappearance/session lifecycle and frame-step implementation.
+5. Test again with mobile camera OFF to preserve archive-only conditions.
+
+No service restart, config change, retention change, or production modification authorized or performed. DeepSeek review remains pending; it must be given these updated observations and must not be told it has read GitHub unless logs are supplied to it.
