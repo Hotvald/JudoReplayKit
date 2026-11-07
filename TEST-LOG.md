@@ -302,3 +302,25 @@ No implementation approval or code edit is recorded here. Any test must be limit
 **Interpretation:** The five-minute discovery window explains the post-refresh "No completed recording found" after the camera had been off for several minutes. This defect is independent of the previously applied Option A boundary correction. Instant Replay needs to locate the latest completed archive span even when no camera is currently streaming, while still loading only the selected replay duration.
 
 **Next:** Propose the bounded/latest-span discovery correction for explicit approval, then test in the isolated Rev.8 environment only. Separately investigate play/pause, frame-step, and replay clock behavior. Do not restart services or change production.
+
+
+## 2026-11-07 — DeepSeek independent review and outstanding MediaMTX diagnostics
+
+DeepSeek's full independent Rev.8 review was supplied by the user. It explicitly disclosed that it could not access GitHub or read the project logs; its assessment is based on the conversation history and supplied evidence.
+
+| DeepSeek F0 diagnostic | Current status | Evidence |
+|---|---|---|
+| F0.1 Unbounded cam1 list | PASS | Previously returned HTTP 200 with one span, duration 4110.145528 s. |
+| F0.2 Five-minute interval after archive end | PASS as reproduction of no-data result | At 13:49:51, interval 13:44:51–13:49:51 returned HTTP 404. |
+| F0.3 24-hour bounded query containing archive | NOT TESTED | Must capture status, body, and elapsed time. |
+| F0.4 Unknown camera path | NOT TESTED | Read-only diagnostic; interpret response cautiously. |
+| F0.5 Wide-query response time | NOT TESTED | Measure with stopwatch. |
+
+**Review recommendations recorded:**
+- Do not select 24-hour, progressive, or unbounded discovery until query behavior and latency are measured.
+- If implemented, change only the minimum necessary archive-discovery logic.
+- Treat pause/resume, frame-step, replay-clock independence, live continuity, and recording continuity as separate test areas.
+- Do not make speculative changes to mergeSpans, playbackUrl, loadSpan, fetchLatestRecordingEnd, live/recording paths, MediaMTX/Caddy configuration, or retention.
+- Verify complete loadSpan/loadReplay source before claiming the 15/30-second media request path is fully correct; previously supplied loadSpan excerpt was partial.
+
+**No code was changed and no services were restarted during the review.** The next step is a read-only 24-hour cam1 list query with response-time measurement. Production remains untouched.
