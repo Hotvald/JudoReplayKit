@@ -73,3 +73,20 @@ Next: inspect the exact Rev.8 replay-player code, the URL returned by the playba
 - Do not repeat these checks without a concrete reason, such as a relevant code/configuration change or a newly observed regression.
 - A passing endpoint test does not prove replay playback, pause, frame stepping, or HLS segment delivery works end-to-end.
 - Record exact test conditions and distinguish endpoint availability from user-visible functionality.
+
+
+## 2026-11-07 — Follow-up: actual playback-list body
+
+**Source:** User-provided PowerShell output. **Test installation:** Rev.8 only; no code/config changes made.
+
+| Check | Result | Detail |
+|---|---|---|
+| Config segment duration | OBSERVED | `recordSegmentDuration: 1h`. |
+| Direct MediaMTX playback-list body | PASS — non-empty | One cam1 span: start `2026-11-07T12:31:46.615665+01:00`, duration `1478.433` seconds (about 24m 38s). |
+| Caddy playback-list body | PASS — non-empty | Same span returned. Generated media URL uses `/get` without `/playback/`. |
+| Empty-list hypothesis | DISPROVED for this request | The actual JSON body contains a span; the player has data to consider. |
+| Configured recording path | OBSERVED | Config points to `C:\\JudoReplayKit_Rev8_Test\\Videos\\...`. |
+| Folder enumerated by user's command | DIFFERENT PATH | Command listed `D:\\JudoReplayKit_Rev8_Test\\Videos` and showed four Nov 6 files. This does not verify contents of the active C: recording path. |
+| Replay video rendering | STILL FAILING / UNRESOLVED | Need overlay status text and browser Network/Console evidence to see whether app requests `/playback/get`, receives data, and decodes frames. |
+
+**Next diagnostic step:** Check the configured C: recording folder, then inspect the replay overlay's exact status and DevTools Network/Console while opening Instant Replay. Do not modify files until the request/decode path is identified. The `.mp4.mp4` naming issue remains separate and unmodified.
