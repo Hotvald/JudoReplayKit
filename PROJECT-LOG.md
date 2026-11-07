@@ -152,3 +152,18 @@ The second AI identifies the `openInstantReplay()` selection condition `s.end <=
 Independent review: the stale-time hypothesis is plausible, but the supplied evidence does not prove it. The previously recorded span start `2026-11-07T12:31:46.615665+01:00` plus duration `1478.433` seconds yields an end around `12:56:25.048+01:00`. That timestamp must be compared with the actual Instant Replay click time and actual list-response time; it cannot be assumed to be in the future. A fresh timestamp after fetch is a reasonable defensive change, but the 2,000 ms tolerance needs justification from measured values and should not mask a clock/time-range or span-selection problem.
 
 **Decision:** Do not approve or apply the code change yet. First capture the actual `/playback/list` response and compare its calculated `s.end` with the browser's `Date.now()` at click time and after the request resolves. Inspect the exact current Rev.8 code and verify how `s.end` is calculated. Production remains protected; no code/configuration or services changed.
+
+
+## 2026-11-07 — Addendum: browser Network evidence for Instant Replay lookup
+
+**Source:** User-provided browser DevTools Network details and response JSON. **Environment:** Rev.8 test only.
+
+- The browser request to /playback/list?path=cam1 returned HTTP 200.
+- Its response contained one cam1 span: start 2026-11-07T12:09:52.409Z, duration 301 seconds, with generated media URL http://localhost:8081/get?... .
+- The matching request URL had a query end of 2026-11-07T12:14:53.409Z. Start plus duration is exactly 12:14:53.409Z, matching that requested end.
+- The browser request to /playback/list?path=cam2 returned HTTP 404. The separate cam2 HLS playlist request also returned 404. Since cam2 was previously verified as not sending, these cam2 404s are consistent with an offline camera and do not establish a cam1 playback failure.
+- The returned cam1 media URL again omits the /playback/ prefix. Caddy's unprefixed /get route was previously verified as 404, while /playback/get returned 200. It is not yet established whether the app consumes this returned URL or constructs its own media URL.
+- **Important timing implication:** openInstantReplay() requests a list ending at now + 1000 ms, then accepts only spans with s.end <= now + 350. Here the returned span ends exactly at the requested query end, i.e. apparently now + 1000 ms. If the request's now is the value used to build the URL, this span fails the 350 ms filter by 650 ms. This is strong evidence for the time-window/filter mismatch, rather than merely a generic network-latency race. The precise runtime values have not yet been logged, so retain a small qualification until source/runtime timing is measured.
+- The cam1 HTTP 200 response proves the browser receives a non-empty JSON list; it does not alone prove the replay player decodes or displays the media.
+
+**Next:** Inspect the exact current Rev.8 openInstantReplay() and media URL selection path. Confirm whether the span end is compared against the same pre-request now, and whether the player uses the returned url or the app's own /playback/get builder. Do not change code until the user approves a repair plan. Production remains untouched.
