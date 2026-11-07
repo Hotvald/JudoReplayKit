@@ -280,3 +280,25 @@ No implementation approval or code edit is recorded here. Any test must be limit
 | Recording continuity during replay | NOT YET VERIFIED | Requires before/after file-size or equivalent observation during the test. |
 
 **Next test:** Reload only the Rev.8 test page (hard refresh), verify live remains visible, click Instant Replay once, and record the new list request/response, `[JUDO-DIAG][instant]` lag, overlay status, and whether actual frames appear. Do not restart services, alter config/retention, or touch production.
+
+## 2026-11-07 — Confirmed five-minute Instant Replay discovery-window defect
+
+**Test environment:** `D:\\JudoReplayKit_Rev8_Test`. **Evidence:** User-provided PowerShell output and inspected `app.js`.
+
+| Check | Result | Detail |
+|---|---|---|
+| Archive exists | PASS | Unbounded MediaMTX list returned HTTP 200 and one CAM1 span. |
+| Archive span | PASS | Start 12:31:46.615665 +01:00; duration 4110.145528 s; end approximately 13:40:16.761. |
+| Local recording files | PASS | Two CAM1 files present; newest file timestamp 13:40:16. |
+| Instant Replay lookback | DEFECT CONFIRMED | Source sets `lookFrom = now - 5 * 60 * 1000`. |
+| Five-minute query | HTTP 404 | At 13:49:51, requested interval 13:44:51–13:49:51, which begins after the archive span ended. |
+| UI error explanation | CONFIRMED | No span is selected, so code throws "No completed recording found yet" before media loading. |
+| Replay duration setting | SOURCE CONFIRMED | `replayWindowSelect` defaults to 15000 ms (15 seconds); this is clip duration, not archive duration. |
+| Replay controls | NOT VERIFIED | User reports controls seem not to work; scroll zoom and panning work. |
+| First replay length | NOT VERIFIED | User estimates about 15 seconds. |
+| Production | UNTOUCHED | No production files, services, or configuration changed. |
+| Code changes during this test | NONE | Read-only source inspection and HTTP queries only. |
+
+**Interpretation:** The five-minute discovery window explains the post-refresh "No completed recording found" after the camera had been off for several minutes. This defect is independent of the previously applied Option A boundary correction. Instant Replay needs to locate the latest completed archive span even when no camera is currently streaming, while still loading only the selected replay duration.
+
+**Next:** Propose the bounded/latest-span discovery correction for explicit approval, then test in the isolated Rev.8 environment only. Separately investigate play/pause, frame-step, and replay clock behavior. Do not restart services or change production.
