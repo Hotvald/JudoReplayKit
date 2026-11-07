@@ -54,3 +54,12 @@ Not yet resolved:
 5. Collect and consolidate defects before editing. Present a repair plan for approval before applying repairs.
 6. Distinguish verified facts from hypotheses.
 7. Do not publish private chat exports, credentials, tokens, personal data, or match recordings in this public repository.
+
+
+## Shared AI history and contribution policy (2026-11-07)
+
+The public GitHub repository is the shared historical knowledge base for the user and all AI assistants working on JudoReplayKit. Every assistant must read the relevant repository history before reviewing, diagnosing, or proposing changes; its own chat context is not assumed to be complete.
+
+Contributions are to be recorded with source attribution and date/revision where available. Original analyses, criticism, alternative proposals, disagreements, corrections, and clarifications must remain distinguishable. A later contribution may add to or challenge an earlier one, but must not silently replace it. Summaries must be labelled as summaries and must not be represented as verbatim source material.
+
+AI assistants that cannot write to GitHub can still participate: the user can pass their responses to the designated log maintainer for addition to the repository. Public-repository safety rules remain in force for secrets, credentials, personal data, private network details, and private recordings.
