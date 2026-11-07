@@ -239,3 +239,24 @@ Additional observation: `fetchLatestRecordingEnd()` at lines 1136–1144 request
 Caution: the supplied `loadSpan()` excerpt is partial (lines 475–510), and `loadReplay()` was not included. These are not required to prove the current branch rejects the observed span, because that error is thrown before `loadReplay()` is called. Consider active-recording/live-edge behavior before selecting request-end `now` vs an acceptance threshold aligned with `now + 1000`.
 
 No code changed, no services restarted, and production remains untouched.
+
+## 2026-11-07 — DeepSeek independently agrees with the minimal Rev.8-only candidate
+
+The user supplied DeepSeek's full independent assessment. DeepSeek honestly stated it had no GitHub/network access in that session and had not read PROJECT-LOG.md or TEST-LOG.md; its analysis used only the fresh source excerpts and browser Network evidence pasted into the conversation.
+
+It independently confirms the arithmetic:
+- Request end: captured now + 1000 ms.
+- Acceptance limit: same captured now + 350 ms.
+- Observed cam1 span end equals request end, therefore it is rejected by 650 ms.
+- The exception occurs before loadReplay(), explaining the visible “No completed recording found yet” state.
+- listSpans() discards the returned url; the app's shown loadSpan() path constructs /playback/get itself. The Caddy /get path mismatch is therefore not causal for this specific no-span error.
+
+Recommended candidate (NOT YET APPLIED): in the isolated Rev.8 file only, change the list request end from `new Date(now + 1000)` to `new Date(now)`, retaining the existing `s.end <= now + 350` filter. DeepSeek considers this safer than expanding the filter to now + 1000, which could accept a span claiming a future/unwritten tail. A fresh timestamp after fetch alone is not sufficient.
+
+Qualifications:
+- Only one observed response is known to end exactly at its request boundary; MediaMTX's general clamping behavior is not established.
+- The candidate must be validated against the active recording edge and actual playback. It only targets the “No completed recording found yet” branch, not every possible playback defect.
+- Do not alter mergeSpans(); its 350 ms adjacency merge is unrelated.
+- fetchLatestRecordingEnd() (request through now + 2000, no matching acceptance filter) is a separate potential issue, not observed failing; leave unchanged pending evidence.
+
+No implementation approval or code edit is recorded here. Any test must be limited to D:\JudoReplayKit_Rev8_Test. Production D:\JudoReplayKit, services, ports, MediaMTX/Caddy configuration, and retention settings remain untouched.
