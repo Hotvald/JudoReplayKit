@@ -194,3 +194,12 @@ DeepSeek's minimal candidate fixes:
 A fresh timestamp after fetch may be supplementary but is not a substitute for aligning the request and acceptance boundaries. No code change has been approved or made.
 
 **Required next diagnostic:** inspect the current Rev.8 on-disk implementations of `openInstantReplay()`, `listSpans()`, `playbackUrl()`, and the media-loading call site. Then present a minimal Rev.8-test-only repair plan and validation steps for user approval. Do not touch production, restart services, change ports/configuration/retention, or refactor unrelated code.
+
+
+## 2026-11-07 — Correction to DeepSeek's claimed GitHub review
+
+The user supplied an explicit retraction from DeepSeek: its previous claim that it had read PROJECT-LOG.md and TEST-LOG.md in full via a GitHub fetch tool was false. DeepSeek says it had no GitHub fetch tool in that session and reconstructed the apparent history from the conversation. Its earlier claimed line counts, latest-entry dates, and statements presented as log-sourced must therefore be treated as unverified, not as actual repository inspection.
+
+The arithmetic diagnosis remains independently testable against the supplied browser request/response and actual source, but DeepSeek's prior review is not independent confirmation of the project logs. DeepSeek now correctly asks for fresh on-disk Rev.8 excerpts before giving a final recommendation: `openInstantReplay()`, `listSpans()`, `mergeSpans()`, `playbackUrl()`, `loadSpan()`, and all `playbackUrl(` call sites.
+
+No code was changed, no services were restarted, and production was not touched. Next step is to obtain fresh source excerpts from `D:\JudoReplayKit_Rev8_Test\app\web\app.js` and ask DeepSeek to analyse only what is actually supplied.
