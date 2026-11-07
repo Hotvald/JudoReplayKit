@@ -210,3 +210,32 @@ No code was changed, no services were restarted, and production was not touched.
 Read-only PowerShell output from the user confirms `D:\JudoReplayKit_Rev8_Test\app\web\app.js` exists (61,107 bytes; LastWriteTime 2026-11-06 14:56:44). However, the anchored regex looking only for conventional `function name(...)` declarations returned no matches for `openInstantReplay`, `listSpans`, `mergeSpans`, `playbackUrl`, or `loadSpan`. The search for `playbackUrl(` also returned no matches.
 
 Do not infer the functions are missing. The code may use assigned functions, object methods, different identifier spelling, or another structure. The command did not display source. Next step: broader identifier search with no function-declaration anchor and surrounding context. No files or services changed; production remains untouched.
+
+
+## 2026-11-07 — Fresh Rev.8 source output confirms Instant Replay boundary mismatch
+
+User supplied fresh PowerShell output from `D:\JudoReplayKit_Rev8_Test\app\web\app.js` (61,107 bytes; LastWriteTime 2026-11-06 14:56:44). Directly visible source:
+
+| Lines | Confirmed behavior |
+|---|---|
+| 255–268 | `listSpans()` calls `/playback/list`; maps response items to `{start,end}` and discards `url`. |
+| 270–275 | `playbackUrl()` constructs `/playback/get?...&format=fmp4`. |
+| 276–284 | `mergeSpans()` merges spans if next start is within 350 ms of previous end. |
+| 475–510 | `loadSpan()` excerpt; line 498 assigns `v.src = playbackUrl(...)`. |
+| 734–765 | `openInstantReplay()`. |
+| 744 | Captures a single `now = Date.now()`. |
+| 746 | Requests list through `new Date(now + 1000)`. |
+| 754 | Filters using same captured value: `s.end <= now + 350`. |
+| 756 | Throws “No completed recording found yet...” if no span passes. |
+| 757–759 | Uses selected `latestEnd` to calculate replay window and call `loadReplay()`. |
+| 1264 | Instant Replay button invokes `openInstantReplay`. |
+
+The browser cam1 response recorded earlier ended exactly at its request end. Combined with the fresh source, that observed span would be rejected by exactly 650 ms. This is now a strongly supported causal diagnosis of the “no completed recording found” message, not merely a generic latency hypothesis.
+
+The app does not use the response's `url` field in the shown source path: `listSpans()` discards it and `loadSpan()` calls the app's own `playbackUrl()` builder, generating `/playback/get`. Therefore the returned `/get` path mismatch does not explain the current no-span selection error.
+
+Additional observation: `fetchLatestRecordingEnd()` at lines 1136–1144 requests through `now + 2000` and takes the latest span end without this same 350 ms filter. Treat it as a separate code path; do not modify it without evidence.
+
+Caution: the supplied `loadSpan()` excerpt is partial (lines 475–510), and `loadReplay()` was not included. These are not required to prove the current branch rejects the observed span, because that error is thrown before `loadReplay()` is called. Consider active-recording/live-edge behavior before selecting request-end `now` vs an acceptance threshold aligned with `now + 1000`.
+
+No code changed, no services restarted, and production remains untouched.
