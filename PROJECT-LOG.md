@@ -315,3 +315,24 @@ Not yet established:
 - Whether live streaming and recording remain unaffected during replay.
 
 Recommended next design: Instant Replay should discover the latest available completed span even when the camera is no longer streaming, rather than limiting archive discovery to the last five minutes. Define a safe bounded archive-search horizon or query the archive index for the latest span; avoid loading the entire archive as the replay clip. Any implementation change requires explicit user approval and must be tested only in `D:\\JudoReplayKit_Rev8_Test`. Production `D:\\JudoReplayKit` remains untouched. No code was changed and no services were restarted during this test.
+
+
+## 2026-11-07 — DeepSeek independent Rev.8 review received
+
+**Source/disclosure:** User supplied DeepSeek's full review. DeepSeek explicitly disclosed it could not access GitHub and had not read PROJECT-LOG.md or TEST-LOG.md. Its review relied on the conversation history and source/test evidence supplied in that session. Do not describe it as a GitHub-verified review.
+
+**Main conclusions:**
+- DeepSeek independently agrees the five-minute lookback in `openInstantReplay()` is a confirmed defect when a camera has been offline for more than five minutes.
+- It distinguishes this from the earlier Option A request-end boundary mismatch. Option A is applied in Rev.8 test; the five-minute lookback remains.
+- It agrees the selected replay duration is separate from archive discovery; the default selector value is 15000 ms (15 seconds).
+- It recommends verifying MediaMTX query semantics and latency before choosing between a 24-hour bounded lookback, progressive fallback, or unbounded query.
+- It advises against speculative changes to `mergeSpans()`, `playbackUrl()`, `loadSpan()`, `fetchLatestRecordingEnd()`, live-streaming code, recording configuration, or retention.
+- It emphasizes that pause/resume, frame-step, clock independence, live continuity, and recording continuity require separate runtime tests.
+
+**Limitations and qualifications:**
+- DeepSeek says MediaMTX 404 semantics and wide-query behavior are not yet established.
+- Its assertion that the existing load path retrieves only the selected 15/30-second duration should be checked against the complete current `loadSpan()` and `loadReplay()` implementations before treating it as fully verified; prior supplied source excerpt for loadSpan was partial.
+- Its statement that live/recording code is unaffected is not a substitute for runtime continuity tests.
+- No code changes or service/configuration changes were made as part of this review.
+
+**Next decision gate:** Run read-only MediaMTX diagnostics for a 24-hour bounded query against cam1, measure response time, and if useful distinguish an unknown path from an existing path with no data. F0.1 (unbounded cam1 query: HTTP 200) and F0.2 (five-minute interval after archive end: HTTP 404) are already observed. F0.3–F0.5 remain to be tested. Do not implement until results are reviewed and the user approves the specific change. Production remains untouched.
