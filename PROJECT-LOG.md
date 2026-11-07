@@ -204,3 +204,10 @@ This correction does not by itself invalidate the arithmetic analysis of the rep
 DeepSeek now requests fresh on-disk excerpts for `openInstantReplay()`, `listSpans()`, `mergeSpans()`, `playbackUrl()`, `loadSpan()`, and all `playbackUrl(` call sites. It promises not to claim unseen line numbers, make edits, generate repair scripts, restart services, or touch production before receiving those excerpts.
 
 **Process note:** Distinguish clearly between (a) DeepSeek's actual admission and current request, (b) earlier browser Network evidence supplied by the user, and (c) prior code excerpts that have not yet been re-read from disk in this session. Do not describe DeepSeek's earlier log review as verified. No code or runtime changes were made.
+
+
+## 2026-11-07 — Rev.8 source extraction attempt: file present, function-pattern search returned no matches
+
+The user ran a read-only PowerShell check against `D:\JudoReplayKit_Rev8_Test\app\web\app.js`. The file exists and reports length 61,107 bytes, LastWriteTime 2026-11-06 14:56:44. The exact anchored search for conventional declarations matching `function openInstantReplay(...)`, `function listSpans(...)`, `function mergeSpans(...)`, `function playbackUrl(...)`, or `function loadSpan(...)` returned no matches. The separate `playbackUrl(` call-site search also returned no matches.
+
+This is only a search-pattern result. It does **not** establish that the functions/features are absent: they may be assigned to variables, declared as object methods, use different names/casing, or otherwise be structured differently. No source code was printed by this command. Next diagnostic is a broader, read-only search for the relevant identifiers without anchoring to `function`, with a few lines of context, then inspect the matching surrounding code. No files changed; no services restarted; production untouched.
