@@ -123,3 +123,19 @@ Next: inspect the exact Rev.8 replay-player code, the URL returned by the playba
 ### Next diagnostic step
 
 Find the exact source-code branch that emits “no completed recording found” in the current Rev.8 app.js/HTML. Trace the lookup request and compare it with the known successful MediaMTX /list response and Caddy /playback/list response. Check browser Network/Console only as needed to capture the actual request and response. Determine whether the UI is querying a different path, time range, or completed-recording condition. Do not make a speculative fix or restart the app/services. Do not modify production.
+
+
+## 2026-11-07 — Review of proposed `openInstantReplay()` race-condition diagnosis
+
+**Source:** Second AI's diagnosis as relayed by the user; independent review in ChatGPT. **Status: NOT VERIFIED; no repair applied.**
+
+| Item | Assessment | Detail |
+|---|---|---|
+| Suspected code | HYPOTHESIS | `openInstantReplay()` filters spans with `s.end <= now + 350`, where `now` is captured before asynchronous list requests. |
+| Proposed correction | NOT APPROVED YET | Recalculate `Date.now()` after `Promise.all()` and consider a larger future tolerance. |
+| Evidence for stale-time race | INSUFFICIENT | Need the actual request/response timing and `s.end` value for the failing click. |
+| Arithmetic cross-check | IMPORTANT | Previously logged span start `12:31:46.615665+01:00` plus duration `1478.433s` gives end about `12:56:25.048+01:00`. Compare with actual click time; this stored span alone does not show a future end. |
+| Tolerance of 2,000 ms | UNJUSTIFIED SO FAR | A fresh post-fetch timestamp is reasonable, but the extra tolerance should be supported by measured timing and must not hide another issue. |
+| Production / running services | UNCHANGED | No code, config, or process changes. |
+
+**Next:** Obtain the exact current Rev.8 `openInstantReplay()` implementation and the actual `/playback/list` JSON response plus request timing for one failing attempt. Calculate `s.end` and compare against both pre-request and post-response browser timestamps. Only then decide whether a minimal code change is justified. Do not restart the app or services.
