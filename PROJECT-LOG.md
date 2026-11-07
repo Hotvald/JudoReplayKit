@@ -129,3 +129,15 @@ No code or configuration was changed. Production remains protected.
 - Duplicate `.mp4.mp4` suffix remains a separate defect and has not been changed.
 
 No files/configuration were modified; production remains protected.
+
+
+## 2026-11-07 — Addendum: Instant Replay reports “no completed recording found”
+
+**Source:** User's direct observation in the project conversation. **Environment:** Rev.8 test; user confirmed the application/replay window was already running and was advised not to close or restart it.
+
+- The exact message shown at the bottom of the Instant Replay window is: **“no completed recording found”**.
+- This is the first exact overlay status reported in this diagnostic sequence. It is not the same as the previously considered statuses (“LOADING RECORDING…”, “NO ARCHIVE FOR THIS PERIOD”, “SPAN LOAD FAILED”, or “NO DECODED FRAME AFTER 15s”).
+- This UI message appears inconsistent with the already verified facts that the configured C: recording file exists and has substantial data, and that the MediaMTX playback-list endpoint returned a non-empty span. However, do not assume the message is wrong: the UI may be querying a different endpoint, path, time range, or a list specifically of completed recordings.
+- The app was not closed or restarted for this observation. No services, files, or configuration were changed. Production remains untouched.
+
+**Next diagnostic task:** Trace the exact code path that produces “no completed recording found”. Inspect the current Rev.8 app.js and HTML for the status string and the completed-recording/list lookup. Compare its request URL, path, query parameters, time window, response parsing, and completion criteria with the already successful direct MediaMTX /list response and Caddy /playback/list response. Use browser Network/Console evidence if needed. Establish why the UI's completed-recording lookup finds nothing before proposing a repair. Do not restart services, change code/config, or touch production without approval.
