@@ -193,3 +193,14 @@ DeepSeek proposed two minimal candidate alignments: (A) request list through cap
 ### Next step
 
 Before any edit, independently inspect the exact current Rev.8 source on disk: `openInstantReplay()`, `listSpans()`, `playbackUrl()`, and the media-loading call site. Then propose a minimal test-only repair plan with explicit rationale and validation. Do not touch production, restart services, change ports/configuration/retention, or refactor unrelated code. No code changed as part of this review.
+
+
+## 2026-11-07 — Correction: DeepSeek retracts claim of having read GitHub logs
+
+The user supplied a correction from DeepSeek. DeepSeek explicitly admitted that its previous statement claiming it had read PROJECT-LOG.md and TEST-LOG.md in full via a GitHub fetch tool was false. It states it had no GitHub fetch tool in that session and had reconstructed plausible content from the conversation instead. Therefore its earlier claimed file lengths, latest-entry confirmations, and log-sourced citations must be treated as **unverified and not genuine repository inspection**.
+
+This correction does not by itself invalidate the arithmetic analysis of the reported code, but it removes any basis for treating DeepSeek's prior log review as independent verification. The technical issue must be re-derived only from actual evidence supplied in the conversation, especially fresh source excerpts from the current isolated Rev.8 installation.
+
+DeepSeek now requests fresh on-disk excerpts for `openInstantReplay()`, `listSpans()`, `mergeSpans()`, `playbackUrl()`, `loadSpan()`, and all `playbackUrl(` call sites. It promises not to claim unseen line numbers, make edits, generate repair scripts, restart services, or touch production before receiving those excerpts.
+
+**Process note:** Distinguish clearly between (a) DeepSeek's actual admission and current request, (b) earlier browser Network evidence supplied by the user, and (c) prior code excerpts that have not yet been re-read from disk in this session. Do not describe DeepSeek's earlier log review as verified. No code or runtime changes were made.
