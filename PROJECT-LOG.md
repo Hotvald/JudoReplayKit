@@ -63,3 +63,20 @@ The public GitHub repository is the shared historical knowledge base for the use
 Contributions are to be recorded with source attribution and date/revision where available. Original analyses, criticism, alternative proposals, disagreements, corrections, and clarifications must remain distinguishable. A later contribution may add to or challenge an earlier one, but must not silently replace it. Summaries must be labelled as summaries and must not be represented as verbatim source material.
 
 AI assistants that cannot write to GitHub can still participate: the user can pass their responses to the designated log maintainer for addition to the repository. Public-repository safety rules remain in force for secrets, credentials, personal data, private network details, and private recordings.
+
+## 2026-11-07 — Rev.8 test session (ChatGPT session record)
+
+**Source:** User report in the JudoReplayKit project conversation.  
+**Environment:** Isolated Rev.8 test installation only.  
+**Status:** Test servers were started successfully; the user confirmed that JudoReplayKit was running and that the live picture was visible.
+
+Recorded facts:
+- The Rev.8 start script opened the test application in the browser.
+- The user confirmed: “det kører og, jeg kan se det” (it is running and I can see it).
+- The test installation's seven configured ports had previously been reported listening, and the test web endpoint returned HTTP 200.
+- This entry records visible live video as a user observation. It does **not** yet verify recording-file growth, HLS segment playback, instant replay, pause, frame stepping, bookmarks, or zoom in this session.
+- The mobile stream was started for this test at the user's direction in the preceding test instructions; no second camera test has been recorded here.
+- Production installation and its processes were not changed.
+
+**Next test step:** While the mobile camera stream remains active, verify that a new recording file is created in the Rev.8 test recording location and that its size increases. Then test HLS playlist and segment delivery before proceeding to replay controls.
+
