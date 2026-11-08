@@ -62,7 +62,7 @@ The software must support **two simultaneous camera streams per mat** as a core 
 
 **CONFIRMED:** A supervisor feature for switching between mats and viewing their live feeds/Instant Replay is strictly **nice-to-have**. It must not complicate the project, delay the core product or compromise the per-mat workflow. It may be deferred or omitted from the initial release if it adds material complexity.
 
-**OPEN:** Whether multi-mat management is included in the first release, and any maximum number of mats. Do not make multi-mat supervisor functionality a prerequisite for a useful first release. If considered later, it must be additive and must not create shared replay/recording bottlenecks or cross-mat failure coupling.
+Multi-mat supervisor management is not required for the initial release. Any later consideration is optional and must be additive, low-complexity and must not create shared replay/recording bottlenecks or cross-mat failure coupling.
 
 ## 3. Core system invariants
 
@@ -364,16 +364,18 @@ Tests requiring a reference rig or numeric thresholds may initially produce expl
 ### Resolved by owner — must not be reopened as if undecided
 1. Replay is an overlay on live; independent from live and recording.
 2. Replay look-back choices 5/10/15/20/30 seconds; 15 seconds default; interval ends at Replay press.
-3. Exact one-decoded-frame forward/backward stepping is the required behavior; feasibility must be proven.
-4. Bookmarks are markers into continuous recording, not clips; no fixed pre/post-roll; bookmark from Instant Replay maps to viewed media timestamp.
-5. No automatic deletion; explicit approval required for any deletion.
-6. Two cameras per mat, opposite corners, each on a tripod.
-7. Automatic two-camera alignment is desired, with measured offset/uncertainty disclosed; no unvalidated numeric guarantee.
-8. Local-first access, optional password protection desired, with ease of use.
-9. Windows and Linux easy installation; ChromeOS conditional only.
-10. Free-tool compatibility, no mandatory paid dependencies, local offline core after installation.
-11. Supervisor feature is nice-to-have only and may be omitted/deferred.
-12. Performance numbers are to be established after practical testing on a defined reference setup.
+3. Exact one-decoded-frame forward/backward stepping is required independently in either selected camera; the cameras need not step in lockstep.
+4. Slow-motion Instant Replay is required; exact speed choices/audio behavior remain open.
+5. Replay opens immediately at the live edge; partial availability is shown honestly rather than waiting for segment finalization.
+6. One bookmark represents a shared event and stores per-camera media mappings; both available views are shown when opened.
+7. Live Delay choices are 1/2/3/4/5 seconds, default 2 seconds, independent of Replay look-back.
+8. No automatic deletion; controlled recording stop before storage exhaustion uses a test-derived safety reserve; explicit approval is required for any deletion.
+9. Bookmarks are markers into continuous recording, not clips; no fixed pre/post-roll; bookmark from Instant Replay maps to viewed media timestamp.
+10. Two cameras per mat, opposite corners, each on a tripod; automatic alignment reports measured offset/uncertainty without an unvalidated numeric guarantee.
+11. Local-first access, optional password protection desired, with ease of use; Windows and Linux easy installation; ChromeOS conditional only.
+12. Free-tool compatibility, no mandatory paid dependencies, local offline core after installation.
+13. Supervisor feature is nice-to-have only and may be omitted/deferred.
+14. Performance numbers are to be established after practical testing on a defined reference setup.
 
 ### Gate A — clarify before final implementation baseline, without reopening resolved owner decisions
 - Exact local network exposure and optional password/authentication defaults.
