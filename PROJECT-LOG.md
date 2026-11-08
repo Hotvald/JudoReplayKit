@@ -803,3 +803,80 @@ They are not a list of Rev.8 repairs to implement.
 **Authorization boundary:** This is specification work only. No Rev.8 repair, Rev.9 coding, PoC, installer, configuration, service or local installation change is authorized. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected.
 
 **Next step:** Obtain independent DeepSeek and Gemini reviews of the exact draft, consolidate findings, resolve owner decisions, then submit a revised numbered specification for explicit owner approval before architecture/implementation planning.
+
+
+## 2026-11-08 — Independent review comparison: Gemini and DeepSeek Rev.9 proposals
+
+**Source:** Complete reviewer texts supplied by the owner in the project conversation. **Reviewer attribution:** Gemini and DeepSeek. **Additional assessment:** ChatGPT. **Status:** Review findings only; no specification approval and no implementation authorization.
+
+### Overall assessment
+
+- DeepSeek supplied the more complete and test-oriented of the two reviewer proposals. Its strengths are explicit requirement IDs, a more detailed bookmark/persistence contract, clearer failure states, a broad acceptance-test matrix, and explicit acknowledgement of technical limitations.
+- Gemini supplied useful architecture and operational observations, especially component separation, recording-health evidence, failure containment, and the suggestion to evaluate a lightweight launcher before committing to a compiled supervisor.
+- Neither proposal should replace REV9-REQUIREMENTS-DRAFT.md draft 0.1 or be adopted unchanged. The existing draft 0.1 remains the better base because it is more technology-neutral and deliberately leaves unapproved technical choices and numeric targets open.
+- The reviewer texts are proposals, not owner decisions. Their suggested thresholds, protocols, formats, storage policies and architectures are not approved.
+
+### DeepSeek proposal — strengths and issues to resolve
+
+**Useful contributions to incorporate or evaluate:**
+- Make the selected replay interval contract explicit and test UI selection, requested interval, returned media interval and actually presented interval separately.
+- Define bookmark persistence as a server-owned service/API with stable identifiers, validation, atomicity/transactions, concurrency and recovery.
+- Give replay, archive and bookmark failures distinct machine-readable states rather than a generic failure.
+- Explicitly test archive discovery when a camera is offline, interrupted recording, post-roll pending/partial states, long-running sessions and two-client bookmark writes.
+- State honestly that browser frame stepping may be approximate unless the chosen media pipeline proves exact decoded-frame stepping.
+- Measure two-camera offset and drift rather than assuming a common PC UTC clock guarantees capture synchronization.
+- Keep camera ingest network exposure separate from UI, management and metrics exposure.
+
+**Corrections/caveats:**
+1. The proposed duration formula and requirement for exactly one request with duration=15.000 are too prescriptive before the actual archive API/media semantics are selected. A media container's reported duration may differ from the requested/presented interval. Specify the user-visible interval and a measurable presentation tolerance first; then choose whether exact-range retrieval or larger-span retrieval plus trimming is the implementation contract.
+2. The requirement that video.duration equal the requested duration within ±0.1 s is not by itself a valid proof of correct interval or visible decode. It must be paired with timestamp/decoded-frame evidence and visible presentation.
+3. The 30 s pre-roll + 15 s post-roll bookmark rule is not approved. Earlier discussions considered 30 s before and approximately 10–15 s after, but the final behavior remains an owner decision.
+4. clickTimeMs, server time, recording-span end and capture time are not interchangeable. The bookmark schema must define the time source and mapping to each camera's archive timeline; a server timestamp alone does not establish the exact captured frame time.
+5. Storing a single bookmarks.json in the recording folder and using temp/fsync/rename is one possible design, not a settled architecture. Filesystem semantics, concurrent writers, backups, removable drives and database recovery must be evaluated before selecting it.
+6. The proposed ±5 s tolerance, 500 ms seek response, 8 s seek timeout, 15 s decode timeout, exact 1/30-second step semantics and other numeric thresholds need a reference platform and measurement method. Do not turn them into binding targets without owner approval.
+7. The frame-step acceptance test allowing either 20 visibly different frames or an APPROXIMATE label is not sufficient. The test must verify the declared stepping behavior and label honestly; an approximate label cannot substitute for a working control.
+8. The synchronization proposal should not assume that a manual visible marker automatically records each phone's actual capture-frame timestamp. The mechanism must be technically defined and validated; otherwise describe it as a calibration aid, not guaranteed synchronization.
+9. The proposed support matrix, Basic authentication, localhost defaults, portable ZIP and sidecar choice are proposals only.
+
+### Gemini proposal — strengths and issues to resolve
+
+**Useful contributions to incorporate or evaluate:**
+- Separate responsibilities for ingest, live delivery, recording/archive, replay, bookmark persistence, UI and lifecycle management.
+- Require recording-health evidence based on actual write progress, not merely an open port or configured path.
+- Require replay failures to be contained so they cannot interrupt recording or ingest.
+- Evaluate a simple launcher before deciding that a compiled Supervisor is needed.
+- Keep disk-full behavior technically honest and do not promise that an in-progress file can never be partial.
+
+**Corrections/caveats:**
+1. Gemini's statement that the core conflict is specifically HLS/WebRTC plus fMP4 writes is not established as a product requirement. Rev.9 must compare media/transport options rather than inherit Rev.8 technologies.
+2. fMP4 does not, by itself, guarantee recovery up to the second after sudden power loss. Segment finalization, fragment/index structure, write buffering and recovery behavior must be specified and tested.
+3. The proposed 1-second replay opening target and 3-second live-delay target are not approved. “Replay available” must be defined as first visibly presented frame, and tested on named reference hardware/network/browser conditions.
+4. The proposal to bind both RTMP ingest and the UI proxy to 0.0.0.0 is unsafe as a blanket rule and conflicts with the need to restrict management exposure. Each endpoint/interface must have an explicit exposure policy. The example RTMP port 1936 is not established; Rev.8 used 1935, but neither port is mandated for Rev.9.
+5. Automatic deletion of the oldest recording below 10 GB and default 30-day retention are destructive proposals and are explicitly unapproved. They must not be adopted without an owner-approved deletion policy, protected/locked tournament rules and recovery safeguards.
+6. A compiled Supervisor, Node/Python sidecar, Caddy and MediaMTX are candidate components, not approved architecture. Their need and responsibilities must be justified against simpler alternatives.
+7. The proposed storage-recovery acceptance test that fills a disk to 99% and expects automatic deletion is unsafe until deletion policy is explicitly approved.
+
+### Consolidated findings for draft 0.2
+
+The next revision should preserve the technology-neutral structure of draft 0.1 and strengthen it in these areas:
+
+- Add an explicit end-to-end replay timing contract separating click time, selected interval, archive availability, request interval, media/container interval, first decoded frame, first visibly presented frame and return-to-live.
+- Define bookmark time semantics and the relationship between event time, server time, camera capture time, ingest time and archive timestamps.
+- Add logical API/data-contract requirements without selecting a particular language, database or process topology.
+- Define component health as distinct signals: camera connected, frames arriving, live frames presented, recording writes progressing, archive query available, replay decoded/presented, storage healthy.
+- Add failure containment and recovery behavior for every logical component.
+- Strengthen two-camera synchronization requirements to measure offset and drift using a defined reference event and disclose confidence/uncertainty.
+- Define honest frame-step capability levels and matching UI language; do not accept a label alone as a substitute for functional behavior.
+- Add test environment metadata and evidence requirements to every acceptance-test report.
+- Review numeric thresholds only after defining reference hardware, browser, camera configuration, network conditions and measurement points.
+- Keep retention, deletion, authentication, supported OS matrix, transport, recording format, installer, supervisor/launcher and database as OPEN until the owner decides or an architecture comparison justifies a proposal.
+
+### Decision and safety status
+
+- REV9-REQUIREMENTS-DRAFT.md draft 0.1 remains the working baseline for specification refinement, not an approved implementation contract.
+- The Gemini and DeepSeek proposals are retained as attributed review inputs; neither is adopted wholesale.
+- No owner decisions have been made by this review.
+- No Rev.8 diagnostics, repairs, Rev.9 code, PoC, installer, configuration or service changes were performed.
+- Production D:\JudoReplayKit and Rev.8 test D:\JudoReplayKit_Rev8_Test remain protected.
+
+**Next step:** Prepare draft 0.2 by applying the agreed clarifications above, preserving unresolved choices as OPEN, then return it for owner review. Do not begin implementation until the owner explicitly approves a numbered specification.
