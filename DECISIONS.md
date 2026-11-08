@@ -88,3 +88,20 @@ Compatibility clarification (checked 2026-11-08):
 - OBS Studio is officially presented as free/open-source software with Windows, macOS and Linux downloads. It is an appropriate cross-platform compatibility target, subject to protocol and version testing.
 
 This is a product requirement, not approval of a particular protocol, media server, package format or architecture. The exact supported protocol matrix and compatibility versions must be specified and acceptance-tested. No paid vendor or streaming product is mandatory.
+
+
+## Rev.9 owner decisions — 2026-11-08 (follow-up)
+
+The owner has confirmed the following product requirements and preferences for the final Rev.9 specification:
+
+1. **Replay interval:** The proposed choices (5, 10, 15, 20 and 30 seconds; 15 seconds default) are accepted on the explicit interpretation that the selected duration is the look-back interval ending at the instant Replay is pressed. Example: pressing Replay at 14:32:10 with 15 seconds selected requests the interval 14:31:55–14:32:10. This defines the user-visible interval, not the underlying API/container retrieval span.
+2. **Frame stepping:** Choose option A: the product promise is one actual decoded video frame per step, forward and backward, subject to feasibility and verification in the supported playback implementation. Do not silently substitute approximate time jumps.
+3. **Bookmarks during replay:** The operator must be able to create a bookmark while viewing Instant Replay. The bookmark must identify the relevant event/media time in the replayed sequence, not merely the wall-clock time when the button is pressed. Keep the proposed retrieval window of 30 seconds before and 15 seconds after the bookmarked event. The implementation must account for post-roll footage becoming available after the event.
+4. **Retention/deletion:** Choose option C: no automatic retention-based or low-space deletion. The user manages recordings. Any deletion of recordings must require explicit user approval before it happens. The UI must make the selected items/scope clear and warn about low storage; do not delete automatically to recover space.
+5. **Two-camera synchronization:** Choose option A: attempt automatic synchronization and report measured alignment/uncertainty honestly. Do not claim a guaranteed numeric tolerance unless later validated and explicitly approved.
+6. **Network access:** Choose option C, subject to usability: local access should be straightforward by default, with the option to enable password protection. The security design must not add unnecessary friction to ordinary local operation; exact exposure defaults and authentication flow must be specified without compromising safety.
+7. **Tournament/mat scope:** NOT DECIDED. The owner did not understand the distinction in the earlier question. Explain the practical difference and obtain an explicit answer before freezing scope. Do not assume single-mat or multi-mat support.
+8. **PRISM usage:** PRISM is intended to run on the mobile device or camera that sends/streams video to JudoReplayKit; it is not requested as a desktop control/production dependency. Integration should therefore focus on receiving the stream from the mobile/camera source using free capabilities. Preserve protocol-level interoperability and the no-paid-dependency requirement. OBS remains a possible free PC/Linux test source/compatibility tool where relevant, not a requirement to run PRISM on Linux.
+9. **Performance:** The owner agrees that immediate replay, independent live/recording operation and straightforward return-to-live are functional requirements now, while exact numerical timing thresholds are established after practical tests on a defined reference setup.
+
+These are owner-confirmed product decisions/preferences except item 7, which remains open. They do not select media-server, protocol, database, installer or other implementation technology. Implementation remains gated on approval of the final numbered Rev.9 specification.
