@@ -121,3 +121,12 @@ These are owner-confirmed product decisions/preferences except item 7, which rem
 - One wireless mouse.
 
 This is the owner's anticipated deployment kit, not a finalized hardware compatibility matrix. The Rev.9 design/test plan must assess two simultaneous camera streams per mat, local network operation through the per-mat router, selected-delay live viewing, continuous recording and Instant Replay on the PC. Windows/Linux are confirmed platform priorities. ChromeOS is an exploratory/conditional target, not a promised supported platform until feasibility and browser/runtime constraints are assessed. Camera support must be based on documented/tested stream protocols and actual device compatibility, not brand assumptions.
+
+
+## Rev.9 owner clarification — supervisor is optional; two camera tripods (2026-11-08)
+
+**Supervisor function:** The supervisor/cross-mat function is strictly a nice-to-have. It must not complicate the project, delay delivery, increase core-system complexity unnecessarily, or compromise the primary per-mat referee workflow. The baseline product must work simply and independently at each mat. Supervisor viewing/switching may be considered only if it can be added with low complexity and without degrading per-mat live viewing, selected delay, Instant Replay, recording, or reliability. It is acceptable to defer or omit supervisor functionality from the initial release.
+
+**Physical equipment per mat — addition:** In addition to the previously listed PC, router, two streaming cameras, power strip/extension cable reel and wireless mouse, the expected equipment includes **two camera tripods**. The two cameras are to be positioned in **opposite corners of the competition area**, providing two different viewing angles of the athletes' executed techniques. The Rev.9 requirements and test plan should account for two stable camera positions and two simultaneous views per mat. Exact mounting height, lens/framing, camera models and placement geometry remain matters for practical setup/testing, not assumptions to hard-code into the product.
+
+This clarification supersedes any implication that supervisor functionality is a required first-release feature. It does not change the two-camera-per-mat baseline or authorize implementation before approval of the final numbered Rev.9 specification.
