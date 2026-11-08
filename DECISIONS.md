@@ -179,3 +179,41 @@ Supervisor switching between mats is **nice-to-have only**. It must not complica
 - Automatic two-camera alignment is desired; report measured offset and uncertainty honestly. No unvalidated numeric sync guarantee.
 
 These clarifications are owner-confirmed. They do not select the implementation stack, media server, protocol, database, installer or network security defaults. Draft 0.3 is a review candidate, not an implementation approval.
+
+## Rev.9 owner decisions — final replay, delay and storage clarifications (2026-11-08)
+
+This section supersedes earlier OPEN wording where it conflicts with the decisions below.
+
+### Replay at the live edge
+- **CONFIRMED:** Replay must open immediately; it must not wait for an in-progress recording segment to be finalized.
+- **CONFIRMED:** If the entire selected look-back interval is not yet available at the instant Replay is pressed, show the actually available interval/footage and make the limitation clear. Do not pretend the full interval is present.
+- **OPEN implementation detail:** The media mechanism used to expose in-progress/rolling-buffer footage remains unselected. The visible behavior above is binding.
+
+### Bookmarks across two cameras
+- **CONFIRMED:** One bookmark represents one shared event/reference moment.
+- **CONFIRMED:** Store the shared event/reference timestamp and the corresponding mapped media position for each camera.
+- **CONFIRMED:** When opening a bookmark, show both camera views where each camera's recording covers the event. The two views do not have to be perfectly identical in time; mapping offset/uncertainty must remain honest.
+
+### Frame-by-frame review
+- **CONFIRMED:** The operator must be able to select Camera 1 or Camera 2 and inspect that camera's recording frame by frame.
+- **CONFIRMED:** Each forward/backward action advances exactly one actual decoded frame in the selected camera.
+- **CONFIRMED:** The two cameras do not have to display the same frame or be frame-identical in time and position during this inspection. The priority is independent, exact frame-by-frame examination of either recording.
+- **OPEN implementation detail:** The playback implementation and supported browser/media matrix must prove this behavior; do not silently substitute approximate time seeking.
+
+### Slow motion
+- **CONFIRMED:** Instant Replay must support slow-motion playback as well as normal playback, pause, seek and exact frame stepping.
+- **CONFIRMED:** Slow motion must not affect live viewing, live delay, ingest or continuous recording.
+- **OPEN:** Exact selectable slow-motion speed values and audio behavior; determine through implementation feasibility and practical review, then document clearly.
+
+### Live delay
+- **CONFIRMED:** Live Delay choices are **1, 2, 3, 4 and 5 seconds**, with **2 seconds as the default**.
+- **CONFIRMED:** Live Delay is independent of Instant Replay look-back. Replay's selected interval ends at the instant Replay is pressed, irrespective of the Live Delay setting.
+- **DERIVED:** Where two delayed camera views are shown together, align them using the measured per-camera timing model and communicate offset/uncertainty honestly. Do not claim unsupported synchronization accuracy.
+
+### Storage full / write failure
+- **CONFIRMED:** Warn about low storage and stop recording in a controlled manner before the destination is completely exhausted, using a safety margin established by practical testing.
+- **CONFIRMED:** Preserve existing recordings. Never automatically delete any recording, including the oldest recording.
+- **CONFIRMED:** Any deletion requires explicit user approval of the exact scope.
+- **DERIVED:** A controlled stop must leave completed recordings accessible and must mark/classify any incomplete tail segment honestly. No fixed reserve size is approved; establish it by testing on the supported storage/reference setup.
+
+These are product decisions and requirements only. They do not select a media server, protocol, database, codec/container, browser pipeline or other implementation technology. No code or environment changes are authorized by these decisions.
