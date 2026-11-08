@@ -444,3 +444,24 @@ No service restart, config change, retention change, or production modification 
 | Functional acceptance | NOT PERFORMED | No camera, playback, frame-step, live-continuity, recording-continuity, storage-full, or installation test was performed during this archive review. |
 
 **Interpretation:** This archive enables a useful source-level review but is not a complete runtime diagnostic bundle. Do not infer that HTTP/media, camera, or recording defects have been resolved from source inspection. No code/configuration or services were changed. Production remains untouched; Rev.9 has not been created.
+
+
+## 2026-11-08 — Rev.9 proposed acceptance plan received (NOT RUN)
+
+**Source:** DeepSeek Rev.9 Requirements Specification supplied by the user. **Environment:** Design review only; no test installation was started or changed.
+
+The specification proposes acceptance tests AT-001 through AT-081. These are requirements/test proposals only; none are recorded as passed, failed, or executed by this entry.
+
+**Mandatory unresolved Rev.8-to-Rev.9 investigation:**
+- **AT-080 / duration discrepancy:** Capture the selected replay-window value, computed start/end, exact /playback/get URL, and resulting media duration in one structured diagnostic record. Repeat ten times with 15 seconds selected. Expected request duration must be exactly 15.000 seconds if the selected-window contract is retained. The historical 25.001-second request remains unexplained.
+- **Replay duration contract review:** Before running AT-023, correct the specification's contradiction between requesting the selected window and requesting the full archive span. The test cannot be judged until the expected contract is unambiguous.
+- **AT-081 / Caddy header rewrite:** Test HLS with and without the header_down Location ^/ /hls/ directive in an isolated test setup. Record actual redirect/playlist/segment URLs and outcomes. No Caddy change is authorized by this test plan.
+
+**Additional tests required before acceptance of the design:**
+- Verify RTMP ingest from a phone on the LAN with the proposed network binding; separately verify that API/metrics are not exposed beyond the intended interface.
+- Verify bookmark creation, delayed post-roll availability, cross-session persistence, concurrent updates from two browser sessions, and recovery from interrupted writes.
+- Verify the exact recording filename/extension produced by pinned MediaMTX v1.21.3 using the proposed Rev.9 recordPath.
+- Measure camera-to-camera timestamp alignment with two independent camera devices; do not assume ±500 ms synchronization from shared host time alone.
+- Simulate disk-full during an active recording segment and document the actual resulting file/recovery behavior.
+
+**Status:** All Rev.9 tests are NOT RUN. No result from this design document changes the existing Rev.8 test results above. No code, configuration, services, production installation, or test installation were modified.
