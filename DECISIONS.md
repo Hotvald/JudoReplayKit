@@ -130,3 +130,52 @@ This is the owner's anticipated deployment kit, not a finalized hardware compati
 **Physical equipment per mat — addition:** In addition to the previously listed PC, router, two streaming cameras, power strip/extension cable reel and wireless mouse, the expected equipment includes **two camera tripods**. The two cameras are to be positioned in **opposite corners of the competition area**, providing two different viewing angles of the athletes' executed techniques. The Rev.9 requirements and test plan should account for two stable camera positions and two simultaneous views per mat. Exact mounting height, lens/framing, camera models and placement geometry remain matters for practical setup/testing, not assumptions to hard-code into the product.
 
 This clarification supersedes any implication that supervisor functionality is a required first-release feature. It does not change the two-camera-per-mat baseline or authorize implementation before approval of the final numbered Rev.9 specification.
+
+
+## Rev.9 final-scope clarification — Draft 0.3 (2026-11-08)
+
+This section consolidates and supersedes earlier wording where it conflicts with later owner clarifications.
+
+### Replay interval and frame stepping
+- Instant Replay choices are **5, 10, 15, 20 and 30 seconds**, with **15 seconds default**.
+- The selected interval ends at the instant Replay is pressed and looks backward by the selected duration. It is the user-visible logical interval; internal request/container spans may differ only if presentation is correctly bounded to the requested interval.
+- Exact frame-by-frame is required: one actual decoded frame forward/backward per action. Feasibility must be demonstrated; do not silently substitute approximate time seeks.
+
+### Bookmark semantics — correction and supersession
+- A bookmark is a marker/pointer into the continuous archive, not a clip.
+- It can be created from Instant Replay and points to the media/event timestamp currently viewed, not button-click wall-clock time.
+- No fixed pre-roll or post-roll is required. The previously discussed 30-second pre-roll and 15-second post-roll are withdrawn.
+- Compact bookmark control; creation must not auto-open the drawer. Live-time bookmarking has not been withdrawn and should be retained if practical, mapping to the media time represented by the live-delay view.
+
+### Recording and deletion
+- Continuous recording of both camera feeds to the user-selected tournament storage is required.
+- No automatic deletion under any circumstances. Every deletion requires explicit user approval of the exact scope.
+- Low-space/write-stall/destination-removal warnings and honest recording health are required. No silent destination switch or destructive cleanup.
+
+### Per-mat setup and camera geometry
+Expected equipment per mat:
+1. One Windows or Linux PC.
+2. One local router.
+3. Two mobile phones or other streaming cameras.
+4. Two camera tripods.
+5. Power strip and/or extension cable reel with outlets.
+6. One wireless mouse.
+
+The two cameras are placed in opposite corners of the competition area to capture techniques from two different angles. Two simultaneous streams per mat are core scope. Exact camera placement, lens/framing and device compatibility must be practically validated.
+
+### Supervisor and multi-mat scope
+Supervisor switching between mats is **nice-to-have only**. It must not complicate the project, delay delivery or degrade the primary per-mat referee workflow. It may be omitted from the initial release. Independent per-mat operation is the baseline; multi-mat/supervisor functionality is not a core release dependency.
+
+### Live delay and local/free operation
+- The mat referee needs live camera viewing with a selectable delay, distinct from Instant Replay. Exact delay choices/default remain open.
+- Windows and Linux easy installation are confirmed priorities; ChromeOS remains conditional/exploratory.
+- Core operation must work locally without ongoing internet, account, cloud, subscription or paid component dependency after installation.
+- Accept free PRISM mobile/camera streams using free supported features and OBS interoperability on Windows/Linux. PRISM is not a required desktop host dependency and must not be claimed as Linux desktop support.
+- Use documented interoperable protocols; exact protocol/device matrix remains an implementation/test decision.
+
+### Performance and sync
+- Functional priority is immediate replay access, independent live/recording and straightforward return-to-live.
+- Numeric performance thresholds are set only after tests on a defined reference setup.
+- Automatic two-camera alignment is desired; report measured offset and uncertainty honestly. No unvalidated numeric sync guarantee.
+
+These clarifications are owner-confirmed. They do not select the implementation stack, media server, protocol, database, installer or network security defaults. Draft 0.3 is a review candidate, not an implementation approval.
