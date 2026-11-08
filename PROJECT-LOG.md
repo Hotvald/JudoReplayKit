@@ -1248,3 +1248,13 @@ No Rev.8 or production files, services, recordings or installations were touched
 - Remove resolved live delay and disk-full policy questions from Gate A.
 
 **Review/scope:** This is the final correction round after the single Gemini + DeepSeek review of Draft 0.3. Draft 0.4 is the corrected owner-approval candidate; it is not approved until the owner explicitly approves it. No implementation, code, installer, service, recording or protected environment was changed.
+
+## 2026-11-08 — Owner approves Rev.9 Requirements Draft 0.4
+
+**Decision:** The owner responded “lad os prøve med det” (“let's try it”) after being presented with Draft 0.4 as the final owner-approval candidate. This is recorded as approval to use Rev.9 Requirements Draft 0.4 as the implementation baseline.
+
+**Scope of approval:** Approval applies to the numbered product requirements in REV9-REQUIREMENTS-DRAFT.md version 0.4. It does not approve any specific architecture, programming language, media server, protocol, database, browser pipeline, installer, dependency or license choice where the specification leaves those open.
+
+**Next phase:** Begin Rev.9 implementation planning and technical feasibility work against Draft 0.4. Preserve the approved requirements. Any proposed change that weakens a confirmed requirement must return to the owner for approval.
+
+**Environment protection:** This approval does not authorize changes to production D:\\JudoReplayKit, the Rev.8 test environment D:\\JudoReplayKit_Rev8_Test, existing recordings or running services. Initial work must be isolated from both protected environments. No destructive test may use real tournament recordings or the production storage destination.
