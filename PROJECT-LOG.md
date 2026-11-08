@@ -880,3 +880,40 @@ The next revision should preserve the technology-neutral structure of draft 0.1 
 - Production D:\JudoReplayKit and Rev.8 test D:\JudoReplayKit_Rev8_Test remain protected.
 
 **Next step:** Prepare draft 0.2 by applying the agreed clarifications above, preserving unresolved choices as OPEN, then return it for owner review. Do not begin implementation until the owner explicitly approves a numbered specification.
+
+
+## 2026-11-08 — Rev.9 requirements specification draft 0.2 prepared
+
+**Source:** ChatGPT synthesis using the fetched draft 0.1, the recorded Gemini/DeepSeek proposal comparison, established owner requirements and Rev.8 risk/acceptance-test history. **Status:** DRAFT FOR OWNER REVIEW AND INDEPENDENT REVIEW — NOT APPROVED FOR IMPLEMENTATION.
+
+### Repository change
+- Updated `REV9-REQUIREMENTS-DRAFT.md` from draft 0.1 to draft 0.2.
+- GitHub file: https://github.com/Hotvald/JudoReplayKit/blob/main/REV9-REQUIREMENTS-DRAFT.md
+- Commit: `cee7c87d84e1dad809438cd66077b80bd9c2a918`
+- New content/blob SHA: `c71035e6f599e6c2d76becd8e762a4ebea5c7745`
+- The updated file was fetched again after the write; its draft 0.2 heading and normative-addendum marker were verified.
+
+### Draft 0.2 changes
+- Adds an end-to-end replay timing contract distinguishing click time, requested interval, archive availability, API/request interval, actual media/container interval, first decoded frame, first visibly presented frame and return-to-live.
+- Clarifies the selected-duration contract: correctness is judged by the visible logical interval, not container duration or request size alone.
+- Separates event time, server receipt/persistence time, camera capture time, ingest time and archive time, and requires explicit per-camera mapping method/uncertainty for bookmarks.
+- Adds logical API/data-contract expectations for inputs, outputs, validation, errors, idempotency, concurrency and persistence without selecting routes, language, database or process topology.
+- Expands health into independent evidence-based states: camera connected, frames arriving, live frames presented, recording writes progressing, archive query available, replay decoded, replay visibly presented and storage healthy.
+- Adds component-by-component failure containment/recovery requirements.
+- Strengthens two-camera synchronization measurement to include clock offset, drift, actual frame alignment and uncertainty; a shared UTC clock or manual marker alone is not proof.
+- Clarifies exact versus best-effort frame-step semantics; a label cannot substitute for a functioning control.
+- Adds reference test-environment and evidence requirements, including decoder and visible-presentation evidence.
+- Adds AT-084 through AT-090 for replay timing trace, bookmark mapping, health independence, API concurrency/idempotency, failure containment, sync uncertainty and frame-step truthfulness.
+- Preserves unapproved choices as OPEN: retention/deletion, disk-full behavior, platform matrix, numeric performance thresholds, media transport/container, authentication, installer, launcher/supervisor, database and other architecture choices.
+
+### FR-022/FR-023 versus Part 5.3 traceability note
+The fetched draft 0.1 contained no stable FR identifiers and its Section 5 was “Continuous recording and archive”; it did not contain the cited FR-022/FR-023 and Part 5.3 duration text. Draft 0.2 therefore does **not** claim that the historical conflict is resolved. It records the reference as an unresolved source-traceability item and asks reviewers/owner to identify the original revision/text. New numbering must not be conflated with the older reference.
+
+### Review and safety status
+- Draft 0.2 is not approved and is not an implementation contract.
+- It is ready to be returned to the owner for review, then supplied unchanged to Gemini and DeepSeek for independent review.
+- No code, PoC, installer, configuration or service work was performed.
+- Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected and untouched.
+- No Rev.8 diagnostic session was run or changed.
+
+**Next step:** Owner reviews the exact draft 0.2. If accepted for external review, provide the same GitHub version to Gemini and DeepSeek and retain their reports separately with attribution. No implementation before explicit owner approval of a final numbered specification.
