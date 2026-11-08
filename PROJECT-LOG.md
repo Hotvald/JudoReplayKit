@@ -472,3 +472,22 @@ Recommended next design: Instant Replay should discover the latest available com
 - Once Gemini's analysis is received, the three assessments will be compared point by point, preserving agreement, disagreement, unique findings, and items requiring empirical tests.
 - No Rev.9 implementation or installation changes are authorized by publication of this review. Production and Rev.8 test installations remain protected.
 
+
+
+## 2026-11-08 — Gemini independent Rev.9 audit received; three-way comparison published
+
+**Source:** Complete Gemini analysis pasted by the user. **Documentation maintained by:** ChatGPT, at the user's explicit request. **Status:** Comparative review only; no specification revision or implementation approved.
+
+- Gemini's full 12-part Rev.9 Requirements Specification / independent technical audit was received on 2026-11-08.
+- Gemini agrees with DeepSeek and ChatGPT on the central requirements: continuous recording independent of replay/bookmarks; replay as a non-blocking overlay; investigation of archive time-window logic and frontend media state; durable server-side bookmark storage; and a real Windows/Linux installation design.
+- Gemini's distinct architectural recommendation is a compiled JudoCore supervisor (Go or Python) to generate configurations, manage MediaMTX/Caddy processes, host SQLite bookmark storage, and monitor health. This remains a proposal, not an approved architecture.
+- Gemini reports additional historical API tests (24-hour query HTTP 200 in 30 ms; five-minute query HTTP 404 after archive end; unknown path HTTP 400). These are attributed to Gemini and are not independently verified by this review.
+- Gemini raises a possible missing fMP4 initialization/moov atom explanation for browser playback failure. This remains a hypothesis pending request/response, payload, and decoder evidence.
+- **Source-version discrepancy:** Gemini describes a five-minute archive lookback, while ChatGPT's static review of the uploaded Rev.8 package found a 24-hour lookback in the current app.js. The exact source/package hashes must be reconciled before either statement is treated as describing the same revision.
+- Gemini's proposals for 30-day retention, deletion below 10 GB free space, replay first-frame latency below 1 second, live latency below 3 seconds, bookmark persistence within 500 ms, and a five-second file-growth health check are not approved requirements. Destructive retention/deletion behavior requires explicit owner approval.
+- The three-way comparison is published as REV9-THREE-WAY-COMPARISON.md. It separates shared conclusions, reviewer-specific findings, hypotheses, unverified historical test reports, and the priority evidence plan.
+- The comparison identifies a source identity check as the first gate, followed by reproduction of the archive time-boundary issue, playback payload/decoder investigation, pause/seek/frame-step tests, two-camera synchronization measurement, bookmark persistence tests, failure containment, disk-full recovery, and clean Windows/Linux installation tests.
+- The comparison also cautions that HTTP 200 does not prove successful video presentation; file growth does not prove crash-safe playable media; a common UTC timeline does not synchronize independent phone cameras; and killing a supervisor is not equivalent to simulating power loss.
+- The user must decide whether DeepSeek should revise Rev.9 and which corrections to request. DeepSeek must not be asked to revise before that decision.
+
+**Next gate:** Owner review of the three-way comparison. Only after owner direction should a correction list be sent to DeepSeek. All implementation, configuration, service, and installation changes remain unauthorized. Production and Rev.8 test installations remain protected.
