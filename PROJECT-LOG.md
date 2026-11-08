@@ -630,3 +630,57 @@ For this initial diagnostic phase:
 - Any later instrumentation, isolated PoC, repair, or implementation requires a separate proposal and the owner's explicit approval.
 
 **Safety status:** This entry records the three reviewer recommendations and the owner's next-step recommendation only. No local code, scripts, configuration, services, recordings, production installation, or Rev.8 test installation were changed. No diagnostic test has yet been run as a result of this recommendation.
+
+
+## 2026-11-08 — Follow-up reviewer clarifications: strengthen E1, observe time-dependent playback, preserve staged fallback
+
+**Sources:** Additional comments from DeepSeek and Gemini supplied by the owner after the three-reviewer readiness entry above. **Status:** Clarification of the approved diagnostic approach; no tests have been run and no files/services were changed.
+
+### Consensus reaffirmed
+
+DeepSeek confirms agreement with the CONDITIONAL GO for read-only diagnostics and NO-GO for full Rev.9 coding. Gemini explicitly retracts its earlier suggestion to add `console.log()` lines to the original `app.js` during the initial diagnostic phase and now endorses the read-only DevTools approach. The earlier entry's description of Gemini's Test B is therefore superseded by this clarification: **no instrumentation is approved in the Rev.8 test installation**.
+
+DeepSeek also clarifies that its approach and Gemini's intended fallback are sequential rather than opposing strategies: begin with read-only observation; only if that is insufficient, consider instrumentation in a separate copy, with explicit owner approval. No such copy or instrumentation is currently authorized.
+
+### Refinements to E1–E3
+
+1. **E1 must verify both identity and relevant content.** In addition to SHA-256 hashes for `app.js`, `index.html`, Caddyfile, and `mediamtx-runtime.yml`, record MediaMTX version and use read-only text searches to locate the known expressions/markers:
+   - `lookFrom = now - 24 * 60 * 60 * 1000`
+   - `new Date(now)`
+   - `s.end <= now + 350`
+   - `header_down Location`
+   
+   Hashes establish file identity; content inspection establishes whether the expected code/configuration markers are actually present. If E1 identifies an unexpected or inconsistent package/version, stop and reconcile it before proceeding.
+
+2. **E2 must include time-dependent observation.** In addition to the selected dropdown value, localStorage, request URL, response and media-element state, observe replay behavior over approximately 60–120 seconds. This specifically addresses the reported symptom where video disappeared after some time and returned after a hard refresh. Record relevant visible behavior and browser/media state without changing the application.
+
+3. **E3 remains payload/transport inspection.** Record status, Content-Type, Content-Length or transfer behavior, range/206 behavior, and safely inspect the relevant MP4 initialization/fragment structure. Avoid downloading a large recording unnecessarily. HTTP 200 or `readyState: 4` alone is not proof that video is visibly decoded and presented.
+
+4. **E1–E3 may be performed in one diagnostic session** if E1 confirms the expected package and no discrepancy requires investigation. The sequencing gate remains: E2/E3 must not proceed against an unidentified or unexpected build. This refines the previous recommendation to do E1 first; it does not require waiting days between read-only observations.
+
+### Priority clarification: Caddy directive
+
+The presence or absence of `header_down Location ^/ /hls/` should be recorded during E1. Its rationale and effect remain undocumented and should be investigated later alongside an HLS regression check (including the proposed AT-081), but DeepSeek considers it lower priority than the active replay/playback issues while HLS live is working. It is an unresolved configuration question, not currently established as a live blocker.
+
+### E7 — conditional diagnostic fallback only
+
+If E1–E3 do not explain the 25.001-second discrepancy or another specific runtime question, a later fallback may be proposed:
+
+- Create a separate diagnostic copy, e.g. `D:\\JudoReplayKit_Rev8_Test_Diag\\`, rather than editing the protected Rev.8 test installation.
+- Add only the minimum required instrumentation to that copy.
+- Clearly identify which shared services/data the copy would contact and assess any risk of interference before running it.
+- Obtain the owner's explicit approval before creating the copy, editing files, or running the instrumented build.
+
+This is **not approved now**. It is a possible E7 proposal only if read-only evidence is insufficient. The original production and Rev.8 test installations remain protected.
+
+### Updated next-step sequence
+
+- **E1:** Read-only hashes, version identity, and targeted content-marker inspection.
+- **E2 + E3:** If E1 matches the expected build, run the duration/request and media-payload/browser diagnostics in the same session; include 60–120 seconds of observation for video disappearance.
+- **Review results:** Decide whether the evidence is sufficient or whether a narrowly scoped E7 proposal is justified.
+- **E4–E6:** Continue with behavioral replay, two-camera, and recording-continuity observations when appropriate.
+- **Rev.9:** Remains NO-GO for full coding until technical blockers, specification contradictions/incomplete interfaces, and owner decisions are resolved.
+
+### Safety status
+
+No diagnostic tests have been run as a result of these comments. No production or Rev.8 test files, code, configuration, recordings, or services were changed. No services were started, stopped, or restarted. E7 instrumentation remains unapproved and requires a separate explicit owner decision.
