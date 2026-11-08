@@ -1100,3 +1100,33 @@ The categories below classify specification readiness, not present-day execution
 - No Rev.8 diagnostic, repair, PoC, Rev.9 code, installer, configuration or service action was performed.
 - Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected and untouched.
 - The next work item is to use this change matrix to prepare Draft 0.3 for owner review. Implementation remains prohibited until the owner explicitly approves a numbered final specification.
+
+
+## 2026-11-08 — Owner confirms free-tool compatibility and no paid dependencies
+
+**Source:** Explicit owner instruction in the JudoReplayKit project conversation. **Status:** Confirmed product requirements; technical implementation remains open.
+
+The owner clarified that the final Rev.9 specification must ensure:
+- Easy installation on both Windows and Linux.
+- Compatibility with free streaming tools such as PRISM Live Studio.
+- No mandatory payment anywhere for JudoReplayKit to provide its intended core functionality optimally. No required subscription, paid cloud service, paid account, paid plugin, paid runtime, or paid third-party license.
+- Essential functionality (live ingest, continuous recording, archive/replay, bookmarks, supported multi-camera operation and local use) must not be gated behind a paid tier.
+- Prefer open/documented protocols and interoperability rather than a dependency on one named streaming application.
+- Third-party paid extras may exist in optional external tools, but JudoReplayKit must not require them. PRISM Plus or other premium tiers must not be required for the integration.
+- Verify license and redistribution rights for every bundled component before release.
+
+### Compatibility facts checked for specification planning
+
+- PRISM's official desktop download page currently lists Windows and macOS, not Linux. Its official FAQ documents Custom RTMP and additional streaming protocol support. PRISM's subscription announcement states that core live streaming remains free while selected premium features are subscription-only. Therefore, PRISM is a compatibility target on platforms where PRISM itself is supported, using free functionality; it is not a Linux client requirement. Sources: https://prismlive.com/en_us/desktop.html ; https://prismlive.com/en_us/faq/faq.html ; https://guide.prismlive.com/desktop/announcement/general/upcoming-subscription-model-for-prism-live-studio
+- OBS Studio's official site describes it as free/open-source and offers Windows, macOS and Linux downloads. OBS is a suitable cross-platform compatibility target, subject to protocol/version testing. Sources: https://obsproject.com/ ; https://obsproject.com/download
+
+### Consequences for the final review and acceptance tests
+
+1. Add a normative “No mandatory paid dependencies” requirement and a dependency/license inventory.
+2. Define a protocol-neutral integration contract, then select a small documented protocol matrix that can be implemented and tested without paid services. Do not hard-code PRISM-specific behavior into the core.
+3. Add acceptance tests for PRISM Custom RTMP on a supported PRISM platform and OBS on Windows and Linux, using free features only. Include reconnect, stream loss, sustained ingest, recording continuity and two-camera behavior where supported.
+4. Verify that the complete core workflow works locally without account registration, paid cloud relay, subscription validation or internet access after installation.
+5. Make Windows and Linux installation and upgrade/uninstall paths independently testable, with no manual editing of configuration files for ordinary users.
+6. Keep external destination costs (for example, a user-chosen public streaming platform) separate from JudoReplayKit operation. JudoReplayKit itself must not require a paid destination to ingest, record and replay locally.
+
+This entry adds owner requirements to DECISIONS.md. It does not select RTMP/SRT/another protocol as the final architecture, does not promise PRISM availability on Linux, and does not authorize implementation before the final numbered specification is approved.
