@@ -409,17 +409,17 @@ Tests requiring a reference rig or numeric thresholds may initially produce expl
 ## 18. Draft 0.4 change summary
 
 Compared with Draft 0.3, this revision:
-1. Resolves replay look-back values/default and precise user-visible interval semantics.
-2. Resolves exact frame-step as the required behavior, with a feasibility proof gate rather than silent approximation.
-3. Corrects bookmark requirements to marker-only semantics and explicitly withdraws fixed 30s/15s pre/post-roll.
-4. Confirms no automatic deletion and explicit approval for all deletion.
-5. Makes two cameras per mat the core baseline, positioned in opposite corners on two tripods.
-6. Makes supervisor/multi-mat switching strictly optional and non-blocking.
-7. Clarifies Windows/Linux priority and ChromeOS conditional status.
-8. Adds selected-delay live viewing as a separate core requirement.
-9. Strengthens free PRISM/OBS interoperability and offline/no-paid-dependency requirements.
-10. Adds test coverage for camera setup, two simultaneous feeds, exact look-back interval, exact frame-step, bookmark mapping, storage failure, local offline use, licensing and clean OS installation.
-11. Reclassifies unresolved questions without reopening owner decisions.
-12. Keeps all architecture choices and unapproved numeric performance targets non-binding.
+1. Carries forward the confirmed replay look-back choices/default and precise user-visible interval semantics.
+2. Defines immediate replay at the live edge, without waiting for segment finalization, and truthful display of partial availability.
+3. Clarifies exact independent frame stepping in either selected camera; frame-lock between cameras is not required.
+4. Adds slow-motion playback as a confirmed requirement while leaving exact speed choices/audio behavior open.
+5. Defines shared-event bookmarks with a per-camera mapped media position and display of both available views.
+6. Confirms Live Delay choices of 1–5 seconds, default 2 seconds, independent of Replay look-back.
+7. Defines controlled stop before storage exhaustion using a test-derived safety reserve, preserving recordings and prohibiting automatic deletion.
+8. Carries forward marker-only bookmarks and withdraws fixed pre-roll/post-roll.
+9. Retains two simultaneous cameras per mat, opposite-corner tripods, optional supervisor scope, Windows/Linux priority and conditional ChromeOS.
+10. Strengthens free PRISM/OBS interoperability and offline/no-paid-dependency requirements.
+11. Adds acceptance tests for live-edge replay, slow motion, independent per-camera frame stepping, dual-camera bookmark mapping, Live Delay values/alignment and controlled storage stop.
+12. Keeps architecture choices and unapproved numeric performance thresholds non-binding.
 
 **Draft 0.4 status: NOT APPROVED. This is the corrected final owner-approval candidate after the single independent Gemini + DeepSeek review round of Draft 0.3. The owner must explicitly approve this numbered specification before any implementation begins.**
