@@ -491,3 +491,17 @@ Recommended next design: Instant Replay should discover the latest available com
 - The user must decide whether DeepSeek should revise Rev.9 and which corrections to request. DeepSeek must not be asked to revise before that decision.
 
 **Next gate:** Owner review of the three-way comparison. Only after owner direction should a correction list be sent to DeepSeek. All implementation, configuration, service, and installation changes remain unauthorized. Production and Rev.8 test installations remain protected.
+
+
+## 2026-11-08 — Three-way review circulated for independent peer comments
+
+- The owner will provide the published three-way comparison to DeepSeek and Gemini so both can comment on ChatGPT's observations and on each other's findings.
+- This is an additional peer-review round, not an instruction to rewrite Rev.9. Each reviewer should identify factual disagreements, missing evidence, source-version differences, overlooked risks, and any corrections to their own earlier analysis.
+- The reviewers should preserve attribution and distinguish source-code facts, executed test results, user-reported symptoms, hypotheses, recommendations, and proposed owner decisions.
+- In particular, the five-minute versus 24-hour archive lookback discrepancy must be reconciled against exact source/package identity and hashes before conclusions are drawn.
+- The missing fMP4 moov/init hypothesis, Gemini's historical HTTP results, and the proposed JudoCore supervisor should be challenged with evidence and alternatives rather than accepted as established facts.
+- Proposed retention/deletion thresholds, performance targets, authentication, and architecture choices remain open and unapproved.
+- **No next implementation or specification-revision step is authorized until the owner has received and considered both reviewers' comments.** Do not ask DeepSeek to revise Rev.9 yet.
+- No code, configuration, service, or installation changes are authorized. Production and Rev.8 test installations remain protected.
+
+**Next gate:** Receive DeepSeek's and Gemini's peer comments on the three-way comparison; then prepare a consolidated response for the owner's decision.
