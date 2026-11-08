@@ -1258,3 +1258,50 @@ No Rev.8 or production files, services, recordings or installations were touched
 **Next phase:** Begin Rev.9 implementation planning and technical feasibility work against Draft 0.4. Preserve the approved requirements. Any proposed change that weakens a confirmed requirement must return to the owner for approval.
 
 **Environment protection:** This approval does not authorize changes to production D:\\JudoReplayKit, the Rev.8 test environment D:\\JudoReplayKit_Rev8_Test, existing recordings or running services. Initial work must be isolated from both protected environments. No destructive test may use real tournament recordings or the production storage destination.
+
+
+## 2026-11-08 — Rev.9 isolated development location and AI review workflow
+
+**Source:** Owner decisions in the JudoReplayKit project conversation.  
+**Status:** Confirmed working location and approved review workflow; no implementation code or local PC files changed by this log entry.
+
+### Isolated development location
+
+- **CONFIRMED by owner:** Rev.9 development workspace is `C:\\JudoReplayKit_Rev9_Dev`.
+- The owner reports that this folder has been created locally.
+- This is a new, independent Rev.9 workspace. It is not derived from or dependent on the USB installation.
+- **Protected:** `D:\\JudoReplayKit` (existing/production installation) and `D:\\JudoReplayKit_Rev8_Test` (Rev.8 test installation) remain untouched.
+- The USB installation may be disconnected after its application/services are properly closed. Preserve its contents as a fallback/reference; do not delete, move or overwrite anything on it.
+- This log records the owner-reported folder creation; it does not claim that this assistant inspected the PC filesystem.
+
+### Approved AI-assisted workflow
+
+**Owner decision (2026-11-08):** Proceed with the proposed staged workflow, using the available AI assistants as independent reviewers rather than parallel implementation teams.
+
+1. **Gemini Pro — first architecture proposal.** Give Gemini the approved Rev.9 requirements and decisions. Ask for 2–3 realistic architecture alternatives, explicit trade-offs, technical feasibility analysis and the smallest proof-of-concept. Do not ask it to write the full application yet.
+2. **DeepSeek — independent critical review.** Give DeepSeek the original requirements and Gemini proposal. Ask it to challenge assumptions, identify overlooked failure modes and independently assess the critical requirements. It must distinguish evidence from hypothesis and must not silently weaken requirements.
+3. **Mistral — additional technical review, if useful.** Give Mistral the original requirements and the proposals/reviews. Focus on implementability, platform constraints, dependencies and license/redistribution implications. This is an additional check, not a competing implementation.
+4. **ChatGPT — synthesis and project quality control.** Compare all assessments against the approved requirements, preserve disagreements and source attribution, identify what needs a prototype, and present a consolidated recommendation to the owner before any architecture is locked or implementation begins.
+
+### First technical priorities
+
+The initial architecture/prototype work must prioritize evidence for:
+- Immediate live-edge replay while continuous recording is still in progress, without waiting for segment finalization.
+- Exact one-actual-decoded-frame forward/backward stepping, independently for either selected camera.
+- Two simultaneous independent camera streams and recordings, with measured timestamp mapping/alignment and honest uncertainty.
+- Replay and slow motion isolated from live presentation, Live Delay, ingest and recording.
+
+The smallest proof-of-concept should test the highest-risk media assumptions before investing in the full UI or application. Any test recording/data must be disposable and explicitly designated for testing. No existing tournament recordings or protected installation data may be used for destructive tests.
+
+### Architecture and implementation boundaries
+
+- The approved Rev.9 Requirements Draft 0.4 and owner decisions remain authoritative. AI proposals are advisory; they do not approve architecture or alter requirements.
+- No language, media server, codec/container, database, browser pipeline, protocol, installer or dependency is selected by this workflow. Those choices remain open until evaluated and supported by prototype evidence and owner approval where required.
+- No code has been generated, installed or run as part of this decision. The local folder location is confirmed by the owner, but its contents have not yet been inspected.
+- Do not modify the production or Rev.8 folders, their services, configurations or recordings. All Rev.9 work must remain isolated in `C:\\JudoReplayKit_Rev9_Dev` (or an explicitly approved isolated repository/workspace if local filesystem access is unavailable).
+
+### Relevant project references
+
+- [Rev.9 Requirements Draft 0.4](https://github.com/Hotvald/JudoReplayKit/blob/main/REV9-REQUIREMENTS-DRAFT.md) — authoritative functional requirements, constraints, open decisions and acceptance-test plan.
+- [Owner Decisions](https://github.com/Hotvald/JudoReplayKit/blob/main/DECISIONS.md) — explicit owner choices and decisions that must not be silently reopened.
+- [Project Log](https://github.com/Hotvald/JudoReplayKit/blob/main/PROJECT-LOG.md) — chronological project history, evidence, hypotheses, AI reviews and safety boundaries.
