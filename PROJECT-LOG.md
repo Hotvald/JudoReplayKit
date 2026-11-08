@@ -1305,3 +1305,56 @@ The smallest proof-of-concept should test the highest-risk media assumptions bef
 - [Rev.9 Requirements Draft 0.4](https://github.com/Hotvald/JudoReplayKit/blob/main/REV9-REQUIREMENTS-DRAFT.md) — authoritative functional requirements, constraints, open decisions and acceptance-test plan.
 - [Owner Decisions](https://github.com/Hotvald/JudoReplayKit/blob/main/DECISIONS.md) — explicit owner choices and decisions that must not be silently reopened.
 - [Project Log](https://github.com/Hotvald/JudoReplayKit/blob/main/PROJECT-LOG.md) — chronological project history, evidence, hypotheses, AI reviews and safety boundaries.
+
+
+## 2026-11-08 — Gemini Pro: initial Rev.9 architecture/specification review (owner-supplied response)
+
+**Source:** Complete response pasted by the owner in the JudoReplayKit project conversation.  
+**Attribution:** Gemini Pro.  
+**Status:** Advisory review recorded; not an owner decision, not an approved specification change, and not an architecture selection.
+
+### Important document/version discrepancy
+
+Gemini's response says it reviewed **Draft 0.3** and recommends corrections to Draft 0.3. The task given to Gemini linked the current **Draft 0.4**, which the owner had already approved on 2026-11-08. Its references to Draft 0.3 and its request for another final owner approval therefore do not establish that the approved Draft 0.4 is deficient. Before relying on any finding, reviewers must identify the exact document version and relevant section they actually inspected.
+
+### Gemini's findings, preserved as attributed opinions
+
+**Overall verdict:** Gemini labelled the specification “CONDITIONAL GO” and considered it detailed about system invariants and failure containment, while raising concerns about container finalization, delayed-live synchronization, time mapping, exact frame stepping, I/O contention, multi-mat scope, timezone handling and browser fMP4 playback.
+
+**Blocking findings raised by Gemini:**
+- **B-1 — Safe stop/container finalization:** Gemini argues that a recording engine must cleanly finalize/close open recording segments before stopping at the storage safety threshold, to preserve already captured footage. It specifically discusses fMP4 and the possibility of an incomplete/unreadable trailing segment if the filesystem becomes exhausted.
+- **B-2 — Synchronization of delayed live views:** Gemini asks whether both delayed live feeds must be synchronized to each other, not merely delayed individually.
+- **B-3 — Time mapping without source capture timecodes:** Gemini notes that mobile RTMP sources may not supply absolute capture timestamps and asks for an explicit fallback mapping based on server receipt time and buffer offsets.
+
+**Important findings raised:**
+- **I-1 — Exact backward frame stepping:** Gemini highlights the difficulty of reverse stepping in inter-frame codecs and the potential cost of decoding forward from a prior keyframe. It recommends prototype evidence rather than assuming ordinary HTML5 video seeking is frame-exact.
+- **I-2 — Read/write contention:** Gemini recommends protecting continuous ingest/recording from replay-read contention. Its proposed strict write-priority wording is a suggestion, not an approved requirement or selected scheduling design.
+
+**Minor findings raised:**
+- **M-1 — Multi-mat scope:** Gemini recommends explicitly excluding supervisor/multi-mat routing and UI until the single-mat baseline passes acceptance tests.
+- **M-2 — Time representation:** Gemini recommends monotonic time or UTC for internal timelines, with local timezone conversion only for UI display.
+
+**Additional technical risks/opinions:**
+- Browser fMP4 replay may require correct initialization/media-fragment handling (Gemini mentions `moov`, byte-range behavior and possible MSE/remux approaches). This is a technical hypothesis to investigate against the selected implementation, not a diagnosis of Rev.9 or proof that fMP4 must be used.
+- Gemini considers tight synchronization of two independent Wi-Fi mobile streams difficult without genlock and warns against promising perfect synchronization.
+- Gemini proposes tests AT-045 (safe stop/storage reserve) and AT-017a (delayed-live synchronization), and proposes strengthening a duration test across multiple interval choices. These are suggestions for checking against the existing Draft 0.4 test plan, not approved new test IDs.
+
+### Independent cross-check against already approved Draft 0.4
+
+The following points are already substantially covered or resolved in Draft 0.4 and must not be treated as missing without identifying a precise remaining gap:
+- **Storage safety:** Draft 0.4 requires a controlled stop before storage exhaustion, preservation of existing recordings, honest classification of an incomplete tail segment, and a test-derived safety reserve. It does not mandate fMP4. A cleanly closed/finalized segment is a reasonable implementation objective, but the implementation must not assume a particular container or promise that data still in volatile buffers can be recovered after hard storage failure.
+- **Delayed-live camera alignment:** Draft 0.4 already includes confirmed automatic alignment using measured per-camera timing and honest offset/uncertainty. Acceptance test **AT-017** explicitly covers dual-camera live-delay alignment. Gemini's proposed AT-017a appears duplicative unless it identifies a distinct uncovered behavior.
+- **Capture-time fallback:** Draft 0.4 already cautions against claiming capture-time synchronization when only ingest-time evidence exists. Its timing model and uncertainty requirements require an honest mapping. A concrete fallback algorithm should be designed and tested during architecture/prototype work; it should not be prematurely hardcoded into the requirements as “ingest time minus buffer” without validating what the source and pipeline actually expose.
+- **Exact frame stepping:** Draft 0.4 explicitly requires one actual decoded frame per action, independently for either selected camera, and includes AT-023 and AT-092 plus a feasibility gate. Gemini's warning reinforces the need for the planned proof-of-concept; it does not justify downgrading the requirement to approximate seeking.
+- **Multi-mat:** Draft 0.4 already says supervisor/multi-mat is optional and may be omitted from initial release. Deferring it until single-mat acceptance is consistent with the approved scope, but no new requirement is necessary unless implementation planning reveals scope creep.
+- **Time model:** The approved spec already requires timestamp mapping and honest uncertainty, but a single explicit internal timebase policy (monotonic clock for durations/order, UTC or equivalent normalized epoch for persisted cross-process/event timestamps, local timezone only for display) remains a useful architecture-level design item to evaluate. Do not conflate wall-clock time with monotonic elapsed time.
+- **Live Delay values:** Gemini's response incorrectly lists live-delay choices/default as an owner decision still required. Draft 0.4 already confirms **1, 2, 3, 4, 5 seconds**, with **2 seconds default**.
+- **Architecture/platform choices:** Authentication defaults, exact supported OS/browser matrix and implementation technologies remain open, as Draft 0.4 states. These are not permission to change the confirmed functional requirements.
+
+### Review disposition / next workflow step
+
+- Retain Gemini's useful technical risks as review input, especially safe segment closure, exact reverse frame stepping, source timestamp limitations, delayed-view alignment and read/write contention.
+- Do not apply Gemini's proposed Draft 0.3 corrections to the already approved Draft 0.4 wholesale.
+- The next planned step is the independent **DeepSeek critical review**. Give DeepSeek both the authoritative Draft 0.4 and Gemini's complete response, and explicitly ask it to verify each Gemini claim against Draft 0.4, identify any new risks, and distinguish confirmed gaps from items already covered.
+- Mistral may then perform an additional implementation/dependency/licensing review.
+- No code, architecture, requirement or local file was changed as a result of this Gemini review. Protected Rev.8/production environments remain untouched.
