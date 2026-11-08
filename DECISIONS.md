@@ -68,3 +68,23 @@ The following points must be resolved in a corrected specification before approv
 The following remain open owner decisions from the DeepSeek proposal: retention policy; disk-full/deletion behavior; supported Linux distributions; Windows installer technology; network exposure defaults; LAN authentication; clock synchronization requirement; Caddy `header_down Location`; error wording; replay preload policy; and root cause of the 25.001-second discrepancy.
 
 **Confirmed existing product decisions remain unchanged:** Option A replay overlay independent of live/recording; continuous recording to user-selected storage; compact bookmarks that do not auto-open the drawer; strict separation/protection of production and test installations; easy installation on Windows and Linux as a product requirement. No new retention, installer, authentication, or binding implementation choice has been approved.
+
+
+## Rev.9 requirements direction — free-tool compatibility and no paid dependencies (owner-confirmed 2026-11-08)
+
+**Decision:** JudoReplayKit must be fully usable for its intended core purpose without mandatory paid subscriptions, paid cloud services, paid streaming platforms, paid runtime components or paid third-party licenses.
+
+Requirements:
+- Core live ingest, continuous recording, archive retrieval, replay overlay, bookmarks, two-camera operation (within the agreed supported scope), diagnostics and local operation must not require an ongoing payment.
+- Do not make optimal or essential operation depend on a vendor cloud account, hosted relay, subscription API, paid codec, paid plugin, or premium tier.
+- Prefer open, documented, interoperable protocols and freely available tools. Avoid binding the product to one streaming application.
+- Provide and test a documented integration path for free streaming software. PRISM Live Studio is an explicitly requested compatibility target where its supported platform and free features permit; OBS Studio is a strong cross-platform compatibility target, including Linux.
+- Do not require PRISM Plus or any other paid feature. If a third-party tool offers optional paid extras, JudoReplayKit's integration and core workflow must use only the free capabilities.
+- Third-party components must be license-compliant and redistributable under the selected distribution model. A component that requires a paid commercial license for the intended use is not an acceptable mandatory dependency.
+- Installation, updates, normal use and local replay must not require a paid account or internet connection after installation, except where the user separately chooses an external streaming destination/service.
+
+Compatibility clarification (checked 2026-11-08):
+- PRISM's official desktop information currently lists Windows and macOS downloads, not Linux. Its FAQ documents Custom RTMP and other streaming protocol support, and its announcement says core live streaming remains free while selected premium features are subscription-only. Therefore, test PRISM compatibility on a supported PRISM platform using its free Custom RTMP capability; do not promise a native PRISM Linux client.
+- OBS Studio is officially presented as free/open-source software with Windows, macOS and Linux downloads. It is an appropriate cross-platform compatibility target, subject to protocol and version testing.
+
+This is a product requirement, not approval of a particular protocol, media server, package format or architecture. The exact supported protocol matrix and compatibility versions must be specified and acceptance-tested. No paid vendor or streaming product is mandatory.
