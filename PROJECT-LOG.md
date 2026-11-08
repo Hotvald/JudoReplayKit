@@ -448,3 +448,16 @@ Recommended next design: Instant Replay should discover the latest available com
 **Next gate:** Ask DeepSeek to revise the contradictory/incomplete parts and return a corrected specification. Then review the revised document and obtain the user's explicit approval for each open product decision before implementation. No Rev.9 implementation work is authorized by receipt of the specification alone.
 
 **Safety status:** This is a documentation/review entry only. No source code, scripts, configuration, services, production installation, or Rev.8 test installation were changed.
+
+
+## 2026-11-08 — Rev.9 three-way analysis comparison confirmed
+
+**Source:** User clarification in the JudoReplayKit project conversation. **Status:** Review sequence confirmed; no specification revision or implementation authorized yet.
+
+- The user clarified that the DeepSeek Rev.9 analysis must first be compared with ChatGPT's independent technical analysis and the Gemini analysis that is still expected.
+- The comparison must happen **before** sending DeepSeek any request to revise its specification. The earlier “ask DeepSeek to revise now” next-step wording is therefore superseded by this entry.
+- Once Gemini's analysis is received, ChatGPT will compare all three assessments point by point, separating: (1) shared conclusions, (2) disagreements, (3) issues found by only one reviewer, and (4) claims that require a concrete test rather than acceptance as fact.
+- The comparison must preserve source attribution and distinguish evidence-backed findings from hypotheses, recommendations, and unresolved questions. It must also reconcile the three analyses against the Rev.8 source package and existing project/test logs.
+- Only after the three-way comparison is complete will the user decide whether DeepSeek should revise the Rev.9 specification and what corrections are required.
+- Until then, no Rev.9 code, scripts, configuration, service, or installation changes are authorized. Production and the isolated Rev.8 test installation remain protected.
+
