@@ -1,8 +1,8 @@
 # JudoReplayKit Rev.9 — Requirements Specification
 
 **Date:** 2026-11-08  
-**Version:** 0.3  
-**Status:** DRAFT FOR FINAL OWNER REVIEW AND ONE INDEPENDENT REVIEW ROUND — NOT APPROVED FOR IMPLEMENTATION  
+**Version:** 0.4  
+**Status:** DRAFT 0.4 — FINAL OWNER-APPROVAL CANDIDATE; NOT APPROVED FOR IMPLEMENTATION  
 **Purpose:** Define the product requirements and acceptance basis for a clean, independent Rev.9 implementation. Rev.9 is not a repair or continuation of Rev.8 architecture.
 
 ## Document authority and interpretation
@@ -14,7 +14,7 @@ Requirement labels:
 - **OPEN** — requires later owner decision, feasibility study or reference-environment test.
 - **OBSERVED Rev.8** — historical symptom/evidence only; not proof of cause and not a Rev.9 design instruction.
 
-This draft incorporates the owner decisions recorded in `DECISIONS.md` through 2026-11-08 and the project history in `PROJECT-LOG.md`. Where an earlier note conflicts with a later explicit owner clarification, the later clarification controls. In particular, bookmarks are markers, not fixed-length clips; the earlier 30-second pre-roll/15-second post-roll idea is withdrawn.
+This draft incorporates the owner decisions recorded in `DECISIONS.md` through 2026-11-08 and the project history in `PROJECT-LOG.md`. Where an earlier note conflicts with a later explicit owner clarification, the later clarification controls. Bookmarks are markers, not fixed-length clips; the earlier 30-second pre-roll/15-second post-roll idea is withdrawn. Draft 0.4 incorporates the owner's final clarifications on live-edge replay, two-camera bookmarks, independent per-camera frame stepping, slow motion, Live Delay and safe storage-full behavior.
 
 All acceptance tests are initially **NOT RUN**. No architecture, numeric performance threshold, security default, protocol, data format or implementation technology is approved by this draft. No implementation may begin until the owner approves a numbered final specification.
 
@@ -88,7 +88,8 @@ The software must support **two simultaneous camera streams per mat** as a core 
 - **DERIVED:** Camera 1 and Camera 2 have separate connection, frame-arrival, live-presentation and recording states.
 - **DERIVED:** “No signal” may appear only when that camera's live source is genuinely unavailable. A replay error or stale UI timer must not falsely cover a valid live picture.
 - **DERIVED:** Live and replay images/states must be unmistakably distinguishable.
-- **OPEN:** Available live-delay choices, default, adjustment granularity and maximum. These are distinct from the Instant Replay look-back choices in Section 5.
+- **CONFIRMED:** Live Delay choices are **1, 2, 3, 4 and 5 seconds**, with **2 seconds as the default**. Live Delay is independent of Instant Replay look-back.
+- **DERIVED:** When both delayed camera views are shown, align them using the measured per-camera timing model and communicate offset/uncertainty honestly; do not claim unsupported synchronization accuracy.
 - **OPEN:** Maximum acceptable live delay and measurement point (camera capture to visible PC presentation). Establish numeric targets only on a defined reference setup.
 - **OPEN:** Supported camera/mobile platforms, source apps, resolutions, frame rates, orientations, codecs and audio.
 
@@ -125,15 +126,19 @@ Requirements:
 - Distinguish the requested logical interval, available archive interval, internal request interval, returned media/container interval and actually presented frames.
 - A larger internal media span is acceptable only if the player trims/presents the requested logical interval accurately and does not silently expose an unintended longer interval.
 - If part of the interval is not yet available, report the actual condition clearly; do not silently substitute a different duration.
-- **OPEN implementation choice:** Exact-range retrieval versus retrieval of a larger containing span followed by explicit trim. Neither is selected by this requirements document.
+- **CONFIRMED live-edge behavior:** Replay opens immediately and must not wait for an in-progress recording segment to be finalized. If the complete selected interval is not yet available at the Replay press time, show the footage/interval that is actually available and clearly disclose that it is partial. Do not claim the full selected interval is present.
+- **OPEN implementation choice:** The mechanism for accessing in-progress/rolling-buffer media, and exact-range retrieval versus a larger containing span followed by trim, remain implementation choices. The user-visible immediate/partial-availability behavior is binding.
 
 ### 5.3 Playback controls and exact frame stepping
 
 - **CONFIRMED owner decision:** Frame-by-frame means exactly one actual decoded frame forward or backward per action, not an approximate time jump.
 - **DERIVED:** Do not label an approximate seek as frame-by-frame. UI must not claim exactness unless the media pipeline demonstrably supports it on the supported media/browser matrix.
-- **OPEN feasibility gate:** Prototype and verify exact decoded-frame stepping for the selected codecs, containers, frame rates (including variable frame rate if supported) and browsers. If exact stepping cannot be reliably delivered, report the limitation and obtain owner approval before weakening the requirement. Do not silently downgrade to best-effort.
-- **DERIVED:** Play/pause labels and states must be truthful. Paused replay cannot drift or snap to live. Seeking affects replay only.
-- **OPEN:** Playback speeds, audio behavior and slow-motion requirements.
+- **CONFIRMED:** The operator can select Camera 1 or Camera 2 and inspect that camera's recording independently, frame by frame. Each action moves exactly one actual decoded frame forward or backward in the selected camera.
+- **CONFIRMED clarification:** The two cameras do not need to display identical frames or remain frame-identical in time/position during frame-by-frame inspection. The priority is exact independent inspection of either recording.
+- **DERIVED:** Play/pause labels and states must be truthful. Paused replay cannot drift or snap to live. Seeking and frame stepping affect replay only.
+- **OPEN feasibility gate:** Prototype and verify exact decoded-frame stepping for each supported camera/media/browser combination, including supported frame rates and variable-frame-rate behavior. If exact stepping cannot be reliably delivered, report the limitation and obtain owner approval before weakening the requirement. Do not silently downgrade to best-effort.
+- **CONFIRMED:** Instant Replay supports slow-motion playback as well as normal playback, pause, seek and frame stepping. Slow motion must not affect live viewing, Live Delay, ingest or continuous recording.
+- **OPEN:** Exact slow-motion speed choices and audio behavior; determine through feasibility and practical testing and document the actual supported behavior.
 
 ### 5.4 Zoom and return to live
 
@@ -163,6 +168,8 @@ Requirements:
 
 - **CONFIRMED:** Bookmarks can be created from Instant Replay.
 - **CONFIRMED:** The bookmark points to the media/event timestamp currently being viewed, not the wall-clock time when the bookmark button is pressed.
+- **CONFIRMED:** One bookmark represents one shared event/reference moment and stores that shared event timestamp plus the corresponding mapped media position for each camera.
+- **CONFIRMED:** Opening a bookmark should show both camera views wherever each camera's recording covers the event. The views need not be perfectly identical in time; per-camera mapping and uncertainty must be preserved honestly.
 - **CONFIRMED:** The continuous recording is the source of truth; later, the user can jump to the marker and inspect surrounding footage as desired.
 - **CONFIRMED:** No automatic 30-second pre-roll/15-second post-roll. That earlier proposal is withdrawn.
 - **CONFIRMED:** Compact bookmark control, preferably a small bottom drop-up/drawer; creating a bookmark must not automatically open the drawer.
@@ -202,7 +209,9 @@ Requirements:
 - **DERIVED:** Warn about low storage and destination unavailability before data loss occurs where detectable.
 - **DERIVED:** If the destination is removed, full or unwritable, stop claiming recording is healthy; show an actionable warning and preserve already finalized files.
 - **DERIVED:** Do not silently switch to another destination or delete old footage.
-- **OPEN policy detail:** When storage becomes full or writes stall, the safe baseline is to stop/disable new recording for the affected camera/session, retain existing data and alert the operator; confirm whether any alternative such as an explicitly selected second destination is desired. No automatic destructive recovery.
+- **CONFIRMED:** Warn about low storage and stop recording in a controlled manner before the destination is completely exhausted. Establish the safety reserve through practical tests on the supported storage/reference setup; no fixed reserve value is assumed.
+- **CONFIRMED:** Preserve existing recordings. Never automatically delete recordings or silently switch destinations. Any deletion requires explicit user approval of the exact scope.
+- **DERIVED:** A controlled stop must leave completed recordings accessible and classify any incomplete tail segment honestly. The UI must clearly distinguish recording stopped for storage safety from healthy active recording.
 - **DERIVED:** Detect incomplete/corrupt tail segments where possible and exclude them from normal completed-archive results while preserving diagnostic evidence.
 - **DERIVED:** Replay/read I/O must not starve recording writes, but scheduling must also avoid indefinite replay starvation. Use bounded resource contention and test under worst-case simultaneous two-camera write plus replay/read load.
 - **Safety:** Disk-full, removable-storage and destructive deletion tests must use disposable virtual/test volumes or explicitly designated test data, never the host system disk or real tournament recordings.
@@ -286,15 +295,19 @@ All tests start **NOT RUN**. A test is not passed until run against a Rev.9 cand
 ### Two-camera and live delay
 - **AT-010 Two-camera ingest:** Send two simultaneous streams; verify correct identity, live presentation and no cross-camera mix-up.
 - **AT-011 Two-camera recording:** Record both feeds continuously and retrieve each independently after source disconnect.
-- **AT-012 Selected live delay:** Verify configured delay corresponds to measured camera-to-visible presentation; record the actual delay and repeatability.
+- **AT-012 Selected live delay:** Verify choices 1/2/3/4/5 seconds and 2-second default against measured camera-to-visible presentation; record actual delay and repeatability.
+- **AT-017 Dual-camera live-delay alignment:** With a repeatable shared visible event, verify both delayed views use the measured per-camera timing model and that displayed offset/uncertainty is honest; no unapproved numeric tolerance is assumed.
 - **AT-013 Camera reconnect:** Disconnect/reconnect one camera; preserve old recording, identify new session/segment and recover without affecting the other camera.
 - **AT-014 Camera position/setup:** With tripods in opposite corners, verify both views show useful complementary coverage of the competition area; document camera placement/settings.
 
 ### Instant Replay
 - **AT-020 Look-back interval:** Test 5/10/15/20/30 seconds, including default 15 seconds. Capture click time, logical interval, API/request span, media span and actually visible frames. Verify exact logical user interval.
+- **AT-027 Slow motion:** Verify slow-motion playback at every speed offered by the product, including stable visible progression and truthful speed indication. Confirm pause/seek/frame-step interaction and that live display, Live Delay, ingest and both recordings remain unaffected.
+- **AT-090 Live-edge replay availability:** Press Replay while the newest recording segment is still in progress. Verify replay opens without waiting for finalization; if the full look-back interval is unavailable, verify the actual available interval is shown and no missing footage is implied.
 - **AT-021 Pause stability:** Pause at a known media timestamp; wait 30 seconds; verify no drift or snap to live.
 - **AT-022 Seek accuracy:** Seek to known timestamps and verify actual visible frames correspond to requested replay position.
 - **AT-023 Exact frame-step:** Verify one actual decoded frame forward/backward per action on every supported media/browser combination. If not achieved, requirement remains failed/open; do not relabel approximate seeking as exact.
+- **AT-092 Independent camera frame-step:** Select Camera 1 and verify exact one-decoded-frame stepping in both directions; repeat independently for Camera 2. Do not require both cameras to show identical frames or advance in lockstep.
 - **AT-024 Zoom focal point:** Select a non-central area; zoom/pan/reset while paused; verify the selected area remains focal.
 - **AT-025 No false no-signal:** Keep valid live feed while replay loads/fails; verify live picture/status is not falsely covered.
 - **AT-026 Return-to-live:** Verify closing replay shows current live image, not a stale frame.
@@ -304,6 +317,7 @@ All tests start **NOT RUN**. A test is not passed until run against a Rev.9 cand
 - **AT-031 Finalization:** Normal shutdown; finalized segments are indexed and playable.
 - **AT-032 Interrupted shutdown:** Use disposable test data; verify completed/incomplete segments are correctly classified after restart.
 - **AT-033 Bookmark from replay:** Create a marker while replay is paused/playing; marker resolves to the exact media position viewed, not click wall-clock time.
+- **AT-091 Dual-camera bookmark mapping:** Create a bookmark for a shared event; verify it stores the common event/reference time and both camera-specific media mappings, and opening it presents each available camera view with honest offset/uncertainty.
 - **AT-034 Bookmark persistence:** Marker survives refresh, browser restart and app restart and leads to corresponding continuous archive.
 - **AT-035 Bookmark UI:** Create marker without opening drawer; compact control remains accessible and confirmation is truthful.
 - **AT-036 Live bookmark mapping:** If live-time bookmarking is supported, verify marker maps to the media time represented by the selected live delay.
@@ -365,8 +379,6 @@ Tests requiring a reference rig or numeric thresholds may initially produce expl
 - Exact local network exposure and optional password/authentication defaults.
 - Minimum supported Windows/Linux releases, browser and CPU architecture.
 - Initial camera/device/protocol compatibility matrix.
-- Live-delay choices/default and measurable reference behavior.
-- Storage-full/write-stall safe-stop details and warning thresholds (automatic deletion remains prohibited).
 - Whether live-time bookmark is included in first release (preserve if low-complexity; owner has not withdrawn it).
 - Exact frame-step feasibility on selected supported media/browser matrix; if infeasible, return to owner rather than silently downgrade.
 - Whether a minimal multi-tournament/session model is needed for first release; supervisor/multi-mat management is not required.
@@ -392,9 +404,9 @@ Tests requiring a reference rig or numeric thresholds may initially produce expl
 - No promise of ChromeOS support before feasibility testing.
 - No requirement to preserve Rev.8 implementation choices or repair Rev.8.
 
-## 18. Draft 0.3 change summary
+## 18. Draft 0.4 change summary
 
-Compared with Draft 0.2, this revision:
+Compared with Draft 0.3, this revision:
 1. Resolves replay look-back values/default and precise user-visible interval semantics.
 2. Resolves exact frame-step as the required behavior, with a feasibility proof gate rather than silent approximation.
 3. Corrects bookmark requirements to marker-only semantics and explicitly withdraws fixed 30s/15s pre/post-roll.
@@ -408,4 +420,4 @@ Compared with Draft 0.2, this revision:
 11. Reclassifies unresolved questions without reopening owner decisions.
 12. Keeps all architecture choices and unapproved numeric performance targets non-binding.
 
-**Draft 0.3 status: NOT APPROVED. It is submitted for final owner review and one independent Gemini + DeepSeek review of this exact same version. Implementation remains prohibited until explicit owner approval of the final numbered specification.**
+**Draft 0.4 status: NOT APPROVED. This is the corrected final owner-approval candidate after the single independent Gemini + DeepSeek review round of Draft 0.3. The owner must explicitly approve this numbered specification before any implementation begins.**
