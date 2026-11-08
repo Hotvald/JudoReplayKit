@@ -418,3 +418,29 @@ No service restart, config change, retention change, or production modification 
 | App's displayed playback status at exact inspection time | NOT RECORDED | Need correlate with `ended` and visible UI. |
 
 **Next read-only checks:** query `v.ended` and inspect the current replay status/overlay. Then read the actual Rev.8 duration calculation and replay-selection code. Do not change code until the 25.001s request construction is understood. No services were restarted and production was not touched.
+
+
+## 2026-11-08 — Rev.8 source collection archive received and inspected
+
+**Source:** User uploaded `JudoReplayKit_Rev8_Review_20261108-120408.zip`. **Test type:** Archive integrity check and static source/configuration inspection only.
+
+| Check | Result | Evidence / limitation |
+|---|---|---|
+| ZIP integrity/open | PASS | Archive opened successfully. |
+| Archive entries | PASS | 16 entries: 15 project files plus collection report. |
+| Current web source present | PASS | `app/web/app.js`, `index.html`, `hls.min.js`. |
+| Runtime configuration present | PASS | MediaMTX YAML, Caddyfile, PowerShell start/stop scripts and README. |
+| Executable binaries | NOT INCLUDED | MediaMTX and Caddy EXEs were excluded by the collection script because each exceeded 20 MB. |
+| Runtime logs | NOT INCLUDED | MediaMTX/Caddy logs were excluded. No runtime diagnosis can be based on them in this review. |
+| Private-key hygiene | WARNING | Archive includes `auto.key` and `auto.crt`. Do not publish or forward the private key. Future review bundles should exclude it. |
+| Installation portability | GAP CONFIRMED IN PACKAGE | README says not to move the folder; config uses absolute Windows paths; startup/shutdown scripts are PowerShell-specific; no Linux procedure included. |
+| Bookmark storage | STATIC OBSERVATION | app.js uses browser localStorage; newly created bookmark uses camera: 0 and opens the drawer automatically. |
+| Replay seek readiness | STATIC OBSERVATION | loadSpan waits for canplay/readyState, then assigns currentTime and continues without explicitly waiting for seeked/presented-frame confirmation. |
+| Frame-step precision | STATIC OBSERVATION | Frame timestamps are used where available; fallback is an approximate 1/30-second seek. |
+| Recording health UI | STATIC OBSERVATION | HTML says continuous recording is configured; no verified recording-file-growth/backend-health check is shown in supplied UI source. |
+| Rev.8 archive discovery | SOURCE CONFIRMED | Current app.js contains 24-hour lookback and existing end-time acceptance filter. |
+| Test retention | SOURCE CONFIRMED | Test MediaMTX config uses recordDeleteAfter: 24h. This is not a final product decision. |
+| Service/network exposure | STATIC OBSERVATION | Test MediaMTX services bind wildcard interfaces; API and metrics exposure need explicit Rev.9 security design. |
+| Functional acceptance | NOT PERFORMED | No camera, playback, frame-step, live-continuity, recording-continuity, storage-full, or installation test was performed during this archive review. |
+
+**Interpretation:** This archive enables a useful source-level review but is not a complete runtime diagnostic bundle. Do not infer that HTTP/media, camera, or recording defects have been resolved from source inspection. No code/configuration or services were changed. Production remains untouched; Rev.9 has not been created.
