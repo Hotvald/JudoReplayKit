@@ -917,3 +917,63 @@ The fetched draft 0.1 contained no stable FR identifiers and its Section 5 was �
 - No Rev.8 diagnostic session was run or changed.
 
 **Next step:** Owner reviews the exact draft 0.2. If accepted for external review, provide the same GitHub version to Gemini and DeepSeek and retain their reports separately with attribution. No implementation before explicit owner approval of a final numbered specification.
+
+
+## 2026-11-08 — Consolidated independent review of Rev.9 draft 0.2 (Gemini + DeepSeek)
+
+**Sources:** Complete Gemini and DeepSeek review reports supplied by the owner in the project conversation; exact repository copies of `REV9-REQUIREMENTS-DRAFT.md`, `DECISIONS.md` and this project log fetched from the GitHub default branch. **Additional assessment:** ChatGPT. **Status:** Consolidated review record and preparation for Draft 0.3; no owner decisions, no specification approval and no implementation authorization.
+
+### Repository verification and correction of a reviewer claim
+
+- The exact current `REV9-REQUIREMENTS-DRAFT.md` is Draft 0.2, blob SHA `c71035e6f599e6c2d76becd8e762a4ebea5c7745`.
+- The exact current `DECISIONS.md` was fetched and inspected (blob SHA `d1ee45a432133d2bff2dea8c5b5bd83e7dd85471`).
+- **DeepSeek's claim that DECISIONS.md confirms replay-duration choices 10/15/20/30 seconds is not supported by the current file.** The fetched file contains no such list. Draft 0.2's available duration choices and default therefore remain OPEN unless another authoritative owner decision/source is produced.
+- The confirmed decisions in DECISIONS.md remain: replay overlay (Option A) independent of live/recording; continuous recording to user-selected tournament storage; compact bookmark control that does not auto-open its drawer; green Live state and “PC IP” wording; easy installation on Windows and Linux as a product requirement; production/test separation.
+- The project log itself was fetched before update at blob SHA `1c748c5f0b2473186b63b4d175c42747e9170690`.
+
+### Common conclusion
+
+Both independent reviewers conclude that Draft 0.2 is suitable for continued specification/review work but **not** an implementation baseline. ChatGPT agrees. No coding or implementation work should begin.
+
+### Consolidated findings to address or explicitly defer
+
+1. **Replay contract and measurable timing:** Resolve the exact user-visible interval contract (exact-range retrieval versus larger-span retrieval with explicit trim), distinguish requested/available/media/presented intervals, and define how tests prove first visibly presented requested frames. Keep performance numbers provisional until a reference environment and measurement method are approved.
+2. **Frame-step semantics:** Owner must choose exact decoded-frame stepping or a clearly specified best-effort temporal step. UI claims and acceptance tests must match actual capability; a label alone is not sufficient.
+3. **Bookmarks and API/data contracts:** Specify logical bookmark schema, stable IDs, event/capture/ingest/server/archive time mapping, persistence guarantees, concurrency/idempotency, validation, errors and recovery. Do not prematurely mandate JSON, SQLite, a particular API route, filesystem primitive or process topology.
+4. **Archive and recording lifecycle:** Specify archive query outcomes, segment completion/incompletion, interrupted shutdown recovery, camera reconnect identity/session behavior, removable storage loss and tournament close/reopen semantics.
+5. **Storage and I/O resilience:** Add requirements for slow/contended storage and safe disk-full testing. Define observable handling of incomplete tail segments and storage failure. No destructive deletion or automatic retention policy without explicit owner approval.
+6. **Network/security:** Define exposure and authorization requirements per endpoint category (camera ingest, UI, replay delivery, management API, metrics/diagnostics). Do not adopt blanket interface bindings or authentication technology without review/owner approval.
+7. **Two-camera synchronization:** Specify a reproducible measurement/calibration method, offset/drift/uncertainty reporting and criteria for “aligned” versus “approximate”. A common host UTC clock or a visible marker alone does not prove capture-frame synchronization.
+8. **Health/diagnostics:** Define evidence fields, freshness/timeout semantics, log rotation/retention/export and privacy-safe diagnostics.
+9. **Platform/UI/lifecycle:** Define supported display dimensions/orientations and touch usability; establish Windows/Linux support matrix and lifecycle expectations before the relevant acceptance tests are treated as executable.
+10. **Tests and test safety:** Classify tests as (a) runnable with current requirements, (b) blocked by Gate A owner decisions, or (c) requiring a prototype/reference environment. Each test needs a reproducible procedure, safe disposable test environment, evidence and pass/fail criteria. Disk-full tests must not fill a host/system disk.
+11. **Additional cases:** Consider bookmark export/import, multiple browser tabs/clients, multi-tournament and multi-mat scope, DST/time-zone transitions, physical storage removal, camera identity replacement, application close/crash/restart and log handling. Each must be specified or explicitly deferred with rationale.
+
+### Reviewer-specific observations
+
+**Gemini:** Useful findings include I/O isolation/resilience, application close/restart state, display support, network-loss bookmark behavior, incomplete media handling, camera reconnect contracts, test automation/evidence, safe disk-full testing, licensing and early security/multi-mat decisions. Its suggestions about mandatory write priority, IndexedDB exclusion, MSE/native playback limitations and capture-time synchronization should be treated as technical hypotheses/options to evaluate, not automatic requirements.
+
+**DeepSeek:** Useful findings include separating runnable/decision-blocked/prototype-dependent tests, specifying health freshness and archive/bookmark error contracts, reproducible failure injection, safe storage test environments, lifecycle and log requirements, and clarifying that several tests depend on Gate A decisions. Its recommendations to mandate particular persistence mechanisms, atomic-write primitives, API status codes, calibration mechanisms or architecture choices are candidates for evaluation, not settled decisions.
+
+### Gate A candidate decisions — owner review required
+
+The following appear likely to block a coherent baseline and should be prioritized for owner discussion:
+- User-visible replay duration contract and available duration choices/default.
+- Frame-step capability promise.
+- Bookmark persistence guarantees and logical contract (without necessarily selecting implementation technology).
+- Disk-full and removable-storage failure behavior, including the boundary on any data deletion.
+- Endpoint exposure/authentication policy.
+- Required two-camera alignment target and acceptable uncertainty.
+- Supported operating systems/distributions, browser and reference hardware needed to make acceptance criteria testable.
+- Whether multi-mat operation is in the initial Rev.9 scope or only a future extensibility requirement.
+
+Other matters (for example log retention period, bookmark export format, detailed UI layout, audio, zoom limits and multi-tournament workflows) may be post-prototype or later decisions only if the specification explicitly records the deferral and preserves required extensibility.
+
+### Current status and next step
+
+- Draft 0.2 remains unchanged and unapproved.
+- No Draft 0.3 has been written.
+- No owner decisions have been made on the basis of reviewer recommendations.
+- Next: provide the same independent review/consolidation prompt and the same source versions to ChatGPT, Gemini and DeepSeek. Each reviewer must verify source claims, especially `DECISIONS.md`, distinguish facts from recommendations and owner decisions, and return a traceable proposed change matrix plus prioritized owner questions.
+- After comparing the three independent outputs, prepare Draft 0.3 for owner review. Obtain explicit owner approval of a numbered final specification before any implementation plan or code.
+- No Rev.8 diagnostics, repair, Rev.9 code, PoC, installer, configuration or service work was performed. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected and untouched.
