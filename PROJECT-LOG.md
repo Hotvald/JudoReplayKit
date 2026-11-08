@@ -107,7 +107,6 @@ This addendum supersedes the earlier “not yet verified” statements for recor
 ## 2026-11-07 — Addendum: replay-list body and storage-path clarification
 
 **Source:** User-provided PowerShell output. **Environment:** Rev.8 test investigation only.
-
 - The current test config reports `recordSegmentDuration: 1h`, `recordFormat: fmp4`, and a `recordPath` under `C:\\JudoReplayKit_Rev8_Test\\Videos\\%path\\...`.
 - Contrary to the leading hypothesis that a one-hour segment setting leaves the playback list empty, the actual MediaMTX playback-list body was **not empty**. Direct request to `http://127.0.0.1:9995/list?path=cam1...` returned one span: start `2026-11-07T12:31:46.615665+01:00`, duration `1478.433` seconds (about 24m 38s).
 - The Caddy list route returned the same span and a generated URL beginning `http://127.0.0.1:8081/get?... `. The unprefixed Caddy `/get` route was previously verified as 404, while `/playback/get` is the working route. This mismatch remains a candidate, but app.js has a separate `playbackUrl()` builder for `/playback/get`; inspect actual browser requests before concluding it causes the UI failure.
@@ -216,7 +215,6 @@ This is only a search-pattern result. It does **not** establish that the functio
 ## 2026-11-07 — Fresh on-disk Rev.8 source confirms request/filter boundary mismatch
 
 The user supplied fresh PowerShell output from the actual file `D:\JudoReplayKit_Rev8_Test\app\web\app.js` (61,107 bytes; LastWriteTime 2026-11-06 14:56:44). This is direct source evidence from the isolated Rev.8 test installation.
-
 ### Confirmed exact code and line numbers
 
 - Lines 255–268: `listSpans(path,start,end,signal)` requests `/playback/list`, parses each item into only `{ start, end }` using `Date.parse(x.start)` and `Number(x.duration)`; it does not preserve `x.url`.
@@ -411,3 +409,21 @@ Recommended next design: Instant Replay should discover the latest available com
 **Rev.9 requirements direction raised by the user:** The independent review must produce a comprehensive requirements specification. Very easy installation on both Windows and Linux is a fundamental requirement, alongside the already confirmed independent replay overlay, continuous recording, minimal replay delay, compact bookmarks, and strict protection of live streaming/recording from replay operations.
 
 **Safety status:** Production `D:\\JudoReplayKit` and isolated Rev.8 test `D:\\JudoReplayKit_Rev8_Test` were not modified. No services were started, stopped, or restarted. Rev.9 has not been created.
+
+## 2026-11-08 — Rev.9 specification work commissioned; implementation not authorized
+
+**Source:** User-provided DeepSeek receipt and assessment in the JudoReplayKit project conversation. **Documentation maintained by:** ChatGPT, at the user's explicit request because the other AI assistants do not have write access to the repository.
+
+- DeepSeek confirmed receipt of the current Rev.8 review material: the current Caddyfile, its dated backup, the current app.js (renamed to .txt for upload), two dated app.js backups, and the four Rev.8 test start/stop scripts. It also confirmed that the six official project documents and the additional HTML, MediaMTX configuration, README, and collection report had been supplied earlier in the conversation.
+- DeepSeek stated that `hls.min.js` is not required to begin requirements/specification work. It may be needed later if an exact third-party library version or implementation detail must be verified.
+- DeepSeek identified an undocumented difference between the current Caddyfile and `Caddyfile.backup_20261106-162845`: the current `/hls/*` reverse-proxy block includes `header_down Location ^/ /hls/`, while the backup does not. The reason and provenance of this change are unknown. It must remain recorded as unexplained until verified; no causal connection to the playback failure is established.
+- The current supplied `app.js` has a 24-hour archive lookback, uses `now` as the playback-list request end, and retains the `s.end <= now + 350` selection filter, according to DeepSeek's source comparison.
+- The playback-duration discrepancy remains unresolved: a browser request was observed with duration `25.001` seconds while the UI selection was `15s`. DeepSeek could not explain this from the reviewed code excerpts. It must be investigated as a distinct issue and included in the Rev.9 acceptance criteria.
+- DeepSeek confirmed that it has sufficient material to begin the 12-part Rev.9 specification. The requested deliverable is a specification and plan only: no Rev.9 implementation, code edits, scripts, configuration changes, service restarts, or modifications to either installation are authorized at this stage.
+- The specification must distinguish verified facts, technical assessments, recommendations, assumptions, and unresolved questions. It must preserve the established requirements for replay overlay independent of live streaming and continuous recording, immediate replay access, continuous recording to user-selected storage, later retrieval of sequences, and compact bookmarks.
+- The user has explicitly assigned ChatGPT responsibility for updating the repository log because the other AI assistants cannot write to it. Documentation updates are therefore part of the project workflow and must not be left solely as instructions for another assistant.
+
+**Documentation follow-up:** Once the Rev.9 specification is received and reviewed, update the relevant project records with the actual specification status and approved decisions: `PROJECT-LOG.md`, `TEST-LOG.md`, `KNOWN-ISSUES.md`, `DECISIONS.md`, `AI-HANDOFF.md`, and `README.md` where its content is affected. Do not record proposed decisions as approved decisions. Planned acceptance tests belong in `TEST-LOG.md`; actual results must be added only after tests are performed.
+
+**Safety status:** This entry records planning and receipt of review material only. No Rev.9 code has been created or applied. Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected; no services were started, stopped, or restarted as part of this documentation update.
+
