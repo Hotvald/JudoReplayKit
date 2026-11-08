@@ -684,3 +684,69 @@ This is **not approved now**. It is a possible E7 proposal only if read-only evi
 ### Safety status
 
 No diagnostic tests have been run as a result of these comments. No production or Rev.8 test files, code, configuration, recordings, or services were changed. No services were started, stopped, or restarted. E7 instrumentation remains unapproved and requires a separate explicit owner decision.
+
+
+## 2026-11-08 — E1 completed on Rev.8 test installation; E2/E3 ready for read-only browser diagnostics
+
+**Source:** Owner-provided PowerShell output from the E1 read-only inspection, plus follow-up review comments from Gemini and DeepSeek. **Environment:** `D:\\JudoReplayKit_Rev8_Test` only. **Status:** E1 completed; E2/E3 are the next approved diagnostic activities. No implementation or repair approved.
+
+### E1 findings (owner-provided output)
+
+All five expected file types were found within the Rev.8 test root:
+
+| File | Observed path | SHA-256 / version |
+|---|---|---|
+| app.js | `app\\web\\app.js` | `473877F9840FCB9D97A6B9A8FFD4E0AA988F53FE12C2D6930EB3C3A1220900D2` |
+| index.html | `app\\web\\index.html` | `9A14D910E1850860C179C3BE0C353084B9782632B115558D02242651B337F6A7` |
+| Caddyfile | `app\\Caddyfile` | `A458D47C7A436885D2EA53E9365047DF00E3056AEA881746A65D50832457FA6F` |
+| mediamtx-runtime.yml | `app\\mediamtx-runtime.yml` | `353C85711DF45A5EBA0C3B429AFB2E297EA18D93CD2911D22E8EA33D93E739FC` |
+| mediamtx.exe | `bin\\mediamtx.exe` | `13A0BFAA852D83CE976C94342A1AF130941BD79FAC2C1E95A2175879C92304C0`; ProductVersion and FileVersion both `1.21.3` |
+
+Observed file sizes and timestamps:
+- app.js: 61,106 bytes; 2026-11-07 14:04:16.
+- index.html: 18,284 bytes; 2026-11-06 15:02:00.
+- Caddyfile: 799 bytes; 2026-11-06 16:28:46.
+- mediamtx-runtime.yml: 646 bytes; 2026-11-07 12:26:36.
+- mediamtx.exe: 57,336,320 bytes; 2026-10-28 15:20:22.
+
+Targeted content checks:
+- `lookFrom = now - 24 * 60 * 60 * 1000`: found at app.js line 744.
+- `new Date(now)`: found at app.js line 746.
+- `s.end <= now + 350`: found at app.js line 754.
+- `header_down Location`: found at Caddyfile line 14 as `header_down Location ^/ /hls/`.
+
+**Interpretation and limits:** E1 confirms that the expected files exist in the specified test root, the listed code/configuration markers are present, and MediaMTX binary metadata reports version 1.21.3. It does not prove the browser is currently serving these exact files, explain the previously reported `duration=25.001`, or establish successful video decode/presentation. In particular, the three literal marker checks do not independently prove the absence of every other duration calculation or URL construction path. The hashes now provide a baseline for subsequent comparisons.
+
+### Reviewer follow-up and E2/E3 protocol
+
+Gemini and DeepSeek both endorse proceeding to read-only browser diagnostics after E1. DeepSeek highlights the need to establish whether the previously reported `duration=25.001` can be reproduced by the current build, rather than assuming the old observation is representative. That discrepancy remains open.
+
+To avoid relying on unverified assumptions, the next browser session must use the actual Rev.8 test page/address already in use; do not assume an unverified URL, query flag, dropdown element ID, or video element ID. Do not restart the test application or services merely to begin this observation.
+
+**E2 — duration and time-dependent playback observation:**
+- In browser DevTools, enable Network Preserve log and clear the existing request list.
+- Set the UI duration to 15 seconds and activate Instant Replay once.
+- Capture the actual request URL(s), especially the full `playback/list` and `playback/get` URLs and query parameters, along with status and response details.
+- Record the selected UI value and whether the actual request duration is 15, 25.001, the full archive span, or another value.
+- Observe the replay for 60–120 seconds and note whether video becomes black/disappears, whether the UI reports an error, and whether it recovers without refresh.
+- Keep the normal camera/live conditions unchanged for the first observation so the test reflects normal operating conditions. If a later isolation test requires disabling a camera, propose it separately and record that it changes the test conditions.
+- Inspect Console errors and browser media state only after identifying the actual relevant page elements; do not assume element IDs from an external reviewer suggestion.
+
+**E3 — playback transport/payload evidence:**
+- For the actual media request, record HTTP status, Content-Type, Content-Length or transfer behavior, and Content-Range / 206 behavior if present.
+- Inspect browser-visible media/decoder/presentation evidence. HTTP 200, `Content-Type: video/mp4`, or `readyState=4` alone does not prove that decoded frames were visibly presented.
+- Safely inspect available MP4 initialization/fragment evidence (`ftyp`, `moov`, `moof`) without downloading a large recording unnecessarily.
+
+E2 and E3 may be completed in one session because E1 matched the expected markers and MediaMTX version. If the page/build identity is contradicted by browser evidence, stop and reconcile it before interpreting further results.
+
+### Open observations retained
+
+- The 25.001-second request versus the 15-second UI selection remains unexplained.
+- The earlier boundary arithmetic between list request end (`now + 1000 ms`) and acceptance filter (`s.end <= now + 350 ms`) remains a strong candidate requiring runtime evidence.
+- The Caddy `header_down Location ^/ /hls/` directive is confirmed present. Its purpose/effect remains unknown and is lower priority while HLS live is working; record it for later HLS regression analysis.
+- The fMP4 initialization/moov issue remains a hypothesis pending actual payload and browser decoder evidence.
+- No repair, instrumentation, isolated copy, or Rev.9 implementation is authorized by this entry.
+
+### Safety status
+
+The E1 script was read-only and the owner-provided output reports no changes. No production files or processes were inspected or modified. No Rev.8 test files, configuration, recordings, or services were changed, started, stopped, or restarted. N1 read-only diagnostics remain the only approved activity. Any instrumentation/PoC or code/configuration repair requires a separate proposal and explicit owner approval.
