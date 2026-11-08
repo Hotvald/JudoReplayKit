@@ -1147,3 +1147,26 @@ The owner clarified and confirmed the following for the final Rev.9 specificatio
 - **Performance:** Owner agrees to define functional immediacy/independence/return-to-live requirements now and establish exact numeric timing thresholds only after practical tests on a defined reference setup.
 
 No implementation or architecture choice is implied by these answers. The final spec must preserve easy Windows/Linux installation, no mandatory paid dependencies, and protection of all existing production/test installations and recordings. No code or runtime was changed as part of this decision update.
+
+
+## 2026-11-08 — Owner clarifies bookmark semantics, multi-mat use and equipment
+
+The owner clarified three important product points:
+
+### Bookmarks are markers, not clips
+A bookmark is only a marker that leads the user to a moment in the continuous recording. Its typical use is post-tournament learning/review. There is no requirement to generate a fixed clip or automatically retain 30 seconds before and 15 seconds after every bookmark; that earlier proposal is withdrawn. The user can inspect the surrounding full recording as needed. Bookmark creation must remain possible from Instant Replay, and the marker must point to the media/event position being viewed, not simply the time the button was clicked. The owner has not said that live-time bookmarking should be removed. The continuous archive is the source of truth for later retrieval.
+
+### Multi-mat and supervisor workflow
+The owner considers multi-mat support a good idea if a supervisor can switch between all mats to inspect their live feeds and Instant Replay. However, the priority is the individual mat referee's workflow: see the live camera feed with a selected delay and use Instant Replay quickly. Multi-mat/supervisor functionality must be additional and must not compromise the speed, simplicity or independence of each mat station. Treat per-mat operation as the baseline and supervisor cross-mat switching as a desired capability to assess; maximum mat count and first-release scope are still not fixed.
+
+### Expected equipment for each mat
+The owner's planned kit per mat is:
+1. One PC running Windows or Linux; ChromeOS is desirable if it is not disproportionately difficult to support.
+2. One router.
+3. Two mobile phones or other streaming cameras, such as GoPro-class devices.
+4. A power strip and/or extension cable reel with outlets.
+5. One wireless mouse.
+
+Windows and Linux remain the priority supported PC platforms. ChromeOS is conditional/exploratory and must not be promised until feasibility is assessed. The specification and test plan should account for two simultaneous camera sources per mat and the local router-based network. Support for specific phone/action-camera models must be validated by protocol and device testing, not assumed from brand name alone.
+
+No code, installation, runtime or recording data was changed. These clarifications update the product requirements only; implementation remains gated on approval of the final Rev.9 specification.
