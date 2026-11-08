@@ -1170,3 +1170,15 @@ The owner's planned kit per mat is:
 Windows and Linux remain the priority supported PC platforms. ChromeOS is conditional/exploratory and must not be promised until feasibility is assessed. The specification and test plan should account for two simultaneous camera sources per mat and the local router-based network. Support for specific phone/action-camera models must be validated by protocol and device testing, not assumed from brand name alone.
 
 No code, installation, runtime or recording data was changed. These clarifications update the product requirements only; implementation remains gated on approval of the final Rev.9 specification.
+
+
+## 2026-11-08 — Owner makes supervisor function optional and adds camera tripods
+
+**Source:** Explicit owner clarification in the project conversation. **Status:** Confirmed product scope/equipment clarification.
+
+- The supervisor function (switching between mats to view their live feeds and Instant Replay) is **nice-to-have only**. It must not complicate the project or compromise the primary workflow for the referee at each individual mat. It may be deferred or omitted from the initial release if it adds material complexity. The baseline remains simple, independent per-mat operation.
+- Add **two camera tripods per mat** to the expected equipment.
+- The two cameras are positioned in **opposite corners of the competition area** so the techniques performed by the athletes can be viewed from two different angles.
+- Requirements and practical testing should consider two simultaneous camera feeds, stable tripod mounting and complementary viewpoints. Exact camera height, lens, framing and placement geometry are not yet specified and should be validated during setup tests.
+
+No code, installation, services or recordings were changed. This is a requirements clarification only; Rev.9 implementation remains gated on approval of the final numbered specification.
