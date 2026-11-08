@@ -505,3 +505,53 @@ Recommended next design: Instant Replay should discover the latest available com
 - No code, configuration, service, or installation changes are authorized. Production and Rev.8 test installations remain protected.
 
 **Next gate:** Receive DeepSeek's and Gemini's peer comments on the three-way comparison; then prepare a consolidated response for the owner's decision.
+
+
+## 2026-11-08 — Gemini peer review received; implementation-readiness recommendation requested from all three reviewers
+
+**Source:** Complete Gemini peer-review comments pasted by the owner. **Documentation maintained by:** ChatGPT at the owner's request. **Status:** Peer-review input received; no Rev.9 revision or implementation approved.
+
+### Gemini's peer-review conclusions
+
+- **Five-minute vs. 24-hour archive lookback:** Gemini explicitly withdraws its earlier five-minute statement as referring to pre-correction notes. It accepts that ChatGPT's static inspection of the latest supplied Rev.8 review ZIP (`JudoReplayKit_Rev8_Review_20261108-120408.zip`) found the current `app.js` using a 24-hour lookback. Gemini identifies that ZIP as the source version to use for the next tests. This resolves the reviewer disagreement at the source-review level, subject to recording/verifying the exact package hash and ensuring runtime tests use that same package.
+- **fMP4 initialization / `moov` hypothesis:** Gemini agrees this is only a hypothesis. It requires inspection of actual HTTP byte-range requests/responses and browser media/decoder diagnostics before deciding whether a custom MSE parser is needed.
+- **JudoCore supervisor:** Gemini accepts that a compiled supervisor is only one possible solution and adds complexity. It agrees a simpler launcher that generates/uses relative paths should be tested as a proof of concept before adopting a new supervisor.
+- **Historical HTTP tests and performance targets:** Gemini says the historical HTTP observations came from earlier user-provided PowerShell output and are not formal acceptance evidence. They should be reproduced and logged in the isolated test environment. Retention thresholds and deletion rules, including a 10 GB free-space threshold, remain proposals only; destructive behavior requires explicit owner approval.
+- **Camera synchronization and frame stepping:** Gemini agrees that a shared server UTC clock does not synchronize independent phone capture/encoder clocks. It also agrees that waiting for a browser `seeked` event does not guarantee exact frame stepping with variable frame rates. Both require empirical measurement.
+- Gemini endorses the comparison's evidence-first sequence and says no final requirements specification should be revised before critical evidence, particularly playback payload/decoder behavior and time-boundary behavior, is collected through safe read-only tests in `D:\\JudoReplayKit_Rev8_Test`.
+
+### Remaining gaps in Gemini's response
+
+Gemini did not directly resolve or explain:
+- The observed browser playback request duration of 25.001 seconds while the UI selection was 15 seconds.
+- The unexplained Caddy `header_down Location ^/ /hls/` difference between the current Caddyfile and its dated backup.
+- The concrete arithmetic risk between the list request end (`now + 1000 ms`) and the span acceptance filter (`s.end <= now + 350 ms`).
+- All 15 items in ChatGPT's preliminary review were not individually answered.
+
+These remain open investigation/review items; Gemini's silence is not evidence that they are resolved.
+
+### Consolidated status after Gemini peer review
+
+- The earlier five-minute lookback claim is withdrawn; the latest supplied Rev.8 source package is reported to contain a 24-hour lookback.
+- The boundary/filter mismatch remains strongly supported by the previously logged browser request/response arithmetic, but still needs exact runtime logging against the identified source package.
+- The 25.001-second duration discrepancy and Caddy `header_down` change remain unexplained.
+- The fMP4 `moov` explanation remains a hypothesis.
+- A JudoCore supervisor is not established as necessary; a simpler launcher proof of concept is a valid alternative to evaluate.
+- Retention, disk-full deletion behavior, performance targets, synchronization tolerances, and final architecture remain unapproved design choices.
+
+### Next requested review from all three assistants
+
+The owner intends to share the updated project log and comparison with DeepSeek, ChatGPT, and Gemini and ask each for an explicit recommendation on **whether implementation coding should begin now**.
+
+Each recommendation should:
+1. State **GO**, **NO-GO**, or **CONDITIONAL GO** for starting implementation now.
+2. Define exactly what “implementation” means (e.g. approved requirements/design work, isolated proof-of-concept, or full application coding); do not conflate these.
+3. List prerequisites and unresolved blockers, with evidence references.
+4. Identify which safe, read-only Rev.8 tests should happen first and what results would change the recommendation.
+5. State whether any implementation can proceed without risking the protected production installation or destabilizing the Rev.8 test installation.
+6. Distinguish mandatory requirements from optional architecture proposals and unapproved policies.
+7. Explain whether the current Rev.9 specification is sufficiently consistent and complete to serve as an implementation baseline, or whether corrections/owner decisions are still required.
+
+No reviewer is authorized to revise Rev.9 or implement code merely by providing this recommendation. The owner will decide after comparing all three responses.
+
+**Safety status:** This entry records Gemini's peer-review response and the next review request only. No source code, configuration, services, or installation files were changed. Production `D:\\JudoReplayKit` and isolated Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No service was started, stopped, or restarted.
