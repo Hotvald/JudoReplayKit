@@ -1182,3 +1182,44 @@ No code, installation, runtime or recording data was changed. These clarificatio
 - Requirements and practical testing should consider two simultaneous camera feeds, stable tripod mounting and complementary viewpoints. Exact camera height, lens, framing and placement geometry are not yet specified and should be validated during setup tests.
 
 No code, installation, services or recordings were changed. This is a requirements clarification only; Rev.9 implementation remains gated on approval of the final numbered specification.
+
+
+## 2026-11-08 — Rev.9 Requirements Draft 0.3 prepared for final review
+
+**Status:** Requirements document updated; no implementation approved or performed. Draft 0.3 supersedes Draft 0.2 as the current review candidate. Draft 0.2 remains in Git history.
+
+### Owner decisions consolidated into Draft 0.3
+- Per-mat baseline: one Windows/Linux PC, one router, two simultaneous streaming cameras, two tripods, power strip/extension cable reel and wireless mouse.
+- Cameras are positioned in opposite corners of the competition area to provide two different viewing angles.
+- Supervisor/cross-mat switching is strictly nice-to-have. It may be omitted from the initial release and must not complicate, delay or degrade the referee's per-mat workflow.
+- Instant Replay look-back choices: 5/10/15/20/30 seconds; 15 seconds default; the visible interval ends at the Replay press time.
+- Exact frame stepping is required: one actual decoded frame forward/backward; implementation feasibility must be demonstrated and no approximate seek may be mislabeled as exact.
+- Bookmarks are markers into the continuous archive, not clips. No fixed pre-roll/post-roll. The old 30-second/15-second proposal is explicitly withdrawn. A bookmark from Instant Replay maps to the media position being viewed.
+- No automatic deletion; any deletion requires explicit approval of exact scope.
+- Mat referee needs selectable-delay live viewing in addition to Instant Replay; the delay choices/default remain open.
+- Two-camera alignment is desired with honest measured offset/uncertainty, without unsupported numeric guarantee.
+- Windows/Linux easy installation, local offline core operation and no mandatory paid dependencies remain requirements. PRISM is a free mobile/camera source where supported; OBS is a free Windows/Linux interoperability target. ChromeOS remains conditional.
+
+### Draft 0.3 contents and review focus
+Draft 0.3 updates the requirements, invariants, per-mat deployment, replay semantics, frame stepping, bookmark contract, storage safety, sync, local security, installation/licensing, test plan, Gate A/B register and explicit non-goals. It deliberately leaves protocol, database, media server, process topology, installer technology and unapproved numeric thresholds open.
+
+Reviewers should particularly verify:
+1. No contradiction between owner decisions and the normative requirements.
+2. Exact logical replay interval and media/request span distinction.
+3. Exact decoded-frame stepping feasibility and honest UI claims.
+4. Marker-only bookmarks and event/media-time mapping.
+5. Two-camera/two-tripod opposite-corner baseline and useful practical camera test.
+6. No automatic deletion and safe storage-full behavior.
+7. Local-first/no-paid-dependency requirements and PRISM/OBS platform wording.
+8. Supervisor optionality and no complexity creep into the per-mat workflow.
+9. Missing edge cases, security risks, acceptance-test completeness and unresolved Gate A items.
+
+### Review procedure
+- Send the exact same Draft 0.3 text to Gemini and DeepSeek.
+- Give both reviewers the same prompt and require findings to be classified as blocker, important, minor or recommendation.
+- Reviewers must not convert their own technology preferences into owner decisions, and must distinguish facts, risks, assumptions and recommendations.
+- Resolve only real contradictions, safety gaps or material testability issues. Do not create an endless review loop.
+- After the one review round, present the resulting numbered final specification to the owner for explicit approval. No Rev.9 code, installer, service or production/test environment changes before that approval.
+
+### Safety and scope record
+No Rev.8 or production files, services, recordings or installations were touched in preparing Draft 0.3. No code was written, no service was started/stopped, and no acceptance test was claimed as passed. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected.
