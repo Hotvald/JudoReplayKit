@@ -1223,3 +1223,28 @@ Reviewers should particularly verify:
 
 ### Safety and scope record
 No Rev.8 or production files, services, recordings or installations were touched in preparing Draft 0.3. No code was written, no service was started/stopped, and no acceptance test was claimed as passed. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected.
+
+## 2026-11-08 — Owner resolves final Draft 0.3 review questions
+
+**Source:** Explicit owner answers in the project conversation. **Status:** Confirmed product requirements. These answers close the six outstanding questions raised after the Gemini and DeepSeek reviews.
+
+1. **Replay at live edge — YES:** Open immediately; do not wait for segment finalization. If the full selected interval is not yet available, show the footage/interval actually available and clearly disclose the limitation.
+2. **Two-camera bookmarks — YES:** One bookmark represents one shared event/reference moment. Store the shared event time and each camera's mapped media position. Opening the bookmark should show both views wherever their recordings cover the event; perfect frame/time identity between views is not required.
+3. **Frame-by-frame — YES, with clarification:** The operator can select either camera and inspect that camera independently. Each step is exactly one actual decoded frame forward/backward in the selected camera. The two cameras do not need to show identical frames at identical times.
+4. **Live Delay vs Instant Replay — YES:** Independent controls. Replay look-back ends at the instant Replay is pressed and is not shifted by the selected Live Delay.
+5. **Storage full — YES:** Warn and stop recording in a controlled manner before the destination is exhausted. Preserve existing recordings; never auto-delete. Any deletion requires explicit approval of the exact scope. Safety reserve is established by testing, not an assumed fixed value.
+6. **Live Delay — CONFIRMED:** Choices 1, 2, 3, 4 and 5 seconds; default 2 seconds.
+
+**Additional new owner requirement:** Instant Replay must support slow-motion playback. Exact speed choices and audio behavior remain open for feasibility/practical validation. Slow motion must remain independent of live viewing and continuous recording.
+
+### Consequent Draft 0.4 changes
+- Replace earlier OPEN live-delay choices/default with 1–5 seconds and 2-second default.
+- Define immediate live-edge replay and truthful partial-availability behavior.
+- Define shared bookmark event/reference plus per-camera mapped media positions.
+- Clarify independent exact frame stepping in either selected camera; no requirement that both cameras step in identical temporal lockstep.
+- Add slow-motion playback as a confirmed requirement and a dedicated acceptance test; leave exact speed values/audio behavior open.
+- Clarify controlled pre-exhaustion recording stop and test-derived reserve; no fixed 500 MB assumption and no deletion.
+- Add/strengthen acceptance tests for live-edge replay, dual-camera bookmarks, per-camera exact stepping and slow motion.
+- Remove resolved live delay and disk-full policy questions from Gate A.
+
+**Review/scope:** This is the final correction round after the single Gemini + DeepSeek review of Draft 0.3. Draft 0.4 is the corrected owner-approval candidate; it is not approved until the owner explicitly approves it. No implementation, code, installer, service, recording or protected environment was changed.
