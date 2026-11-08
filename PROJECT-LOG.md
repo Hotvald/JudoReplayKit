@@ -750,3 +750,39 @@ E2 and E3 may be completed in one session because E1 matched the expected marker
 ### Safety status
 
 The E1 script was read-only and the owner-provided output reports no changes. No production files or processes were inspected or modified. No Rev.8 test files, configuration, recordings, or services were changed, started, stopped, or restarted. N1 read-only diagnostics remain the only approved activity. Any instrumentation/PoC or code/configuration repair requires a separate proposal and explicit owner approval.
+
+
+## 2026-11-08 — Strategic clarification: Rev.9 requirements specification is now the main workstream
+
+**Source:** Owner clarification in the JudoReplayKit project conversation. **Status:** Workstream correction and authorization boundary; no code or installation changes.
+
+### Corrected direction
+
+The intended next deliverable is a **new, complete Rev.9 requirements specification for an application to be implemented from scratch**. The work is not to continue repairing, patching, or incrementally extending Rev.8.
+
+The earlier wording that made E2/E3 the immediate next task was misleading. E2/E3 are optional, supplemental, read-only investigations. They may provide useful evidence and help formulate acceptance tests, but **they are not prerequisites for drafting Rev.9 and must not delay the specification**.
+
+The existing Rev.8 findings are to be treated as:
+- documented observations and technical risks;
+- examples of failure modes that Rev.9 must prevent;
+- inputs to concrete acceptance tests;
+- hypotheses only where the cause has not been established.
+
+They are not a list of Rev.8 repairs to implement.
+
+### Agreed sequence from this clarification
+
+1. Draft the complete Rev.9 requirements specification, distinguishing confirmed owner requirements, derived technical requirements, unresolved owner decisions, Rev.8 observations/hypotheses, and measurable acceptance tests.
+2. Share the draft with DeepSeek and Gemini for independent review.
+3. Consolidate disagreements, contradictions, missing interfaces, and decisions requiring the owner's choice.
+4. Revise the document and obtain the owner's explicit approval of the specification as the implementation baseline.
+5. Only after approval, prepare the implementation plan and begin a clean Rev.9 implementation from scratch.
+
+### Boundaries retained
+
+- No Rev.8 repair or modification is authorized.
+- No Rev.9 application coding, installer work, supervisor implementation, or isolated PoC is authorized by this clarification.
+- E2/E3 remain optional read-only diagnostics and may be performed later if their evidence would materially improve a specific requirement or acceptance test.
+- Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No services are to be started, stopped, or restarted as part of this specification work.
+
+**Next deliverable:** Rev.9 — complete requirements specification, draft for independent review; not yet an approved implementation contract.
