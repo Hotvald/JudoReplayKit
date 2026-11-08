@@ -105,3 +105,19 @@ The owner has confirmed the following product requirements and preferences for t
 9. **Performance:** The owner agrees that immediate replay, independent live/recording operation and straightforward return-to-live are functional requirements now, while exact numerical timing thresholds are established after practical tests on a defined reference setup.
 
 These are owner-confirmed product decisions/preferences except item 7, which remains open. They do not select media-server, protocol, database, installer or other implementation technology. Implementation remains gated on approval of the final numbered Rev.9 specification.
+
+
+## Rev.9 owner clarification — bookmarks, multi-mat workflow and per-mat equipment (2026-11-08)
+
+**Bookmarks — clarified owner intent:** A bookmark is only a marker/pointer to a moment in the continuous recording, primarily for post-tournament learning/review. It is not a request to create or preserve a fixed-length clip. The previously suggested automatic 30-second pre-roll and 15-second post-roll are NOT required and are withdrawn. The continuous recording is the source that allows the user to inspect whatever surrounding sequence is useful later. The bookmark should identify the correct media/event time and take the user directly to that point in the archive. The owner previously required bookmark creation to be possible from Instant Replay; preserve this, mapping the marker to the media position currently being viewed (not the button-click wall clock). The owner has not withdrawn the ability to bookmark during live operation. Do not make clip generation or automatic pre/post-roll a core bookmark behavior.
+
+**Multi-mat intent:** Multiple mats are desirable if a supervisor can switch between all mats to view their live feeds and Instant Replay. However, the primary and non-negotiable workflow is that each mat referee has a straightforward local workstation with live video at a selected delay and immediate Instant Replay. Multi-mat/supervisor functionality must not degrade or complicate the mat referee workflow, and must not introduce replay latency or interrupt live display/recording. Treat independent per-mat operation as the baseline; supervisor cross-mat viewing/switching is a desired capability whose architecture and scope must be evaluated. The owner has not yet specified a maximum number of mats or whether supervisor control must be available in the first release.
+
+**Expected equipment per mat (owner planning assumption):**
+- One PC, preferably supporting Windows and Linux; ChromeOS is desirable only if it can be supported without disproportionate complexity.
+- One router.
+- Two mobile phones or other streaming cameras (e.g. GoPro-class devices).
+- Power strip and/or extension cable reel with outlets.
+- One wireless mouse.
+
+This is the owner's anticipated deployment kit, not a finalized hardware compatibility matrix. The Rev.9 design/test plan must assess two simultaneous camera streams per mat, local network operation through the per-mat router, selected-delay live viewing, continuous recording and Instant Replay on the PC. Windows/Linux are confirmed platform priorities. ChromeOS is an exploratory/conditional target, not a promised supported platform until feasibility and browser/runtime constraints are assessed. Camera support must be based on documented/tested stream protocols and actual device compatibility, not brand assumptions.
