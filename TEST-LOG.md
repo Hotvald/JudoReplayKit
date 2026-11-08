@@ -401,3 +401,20 @@ No service restart, config change, retention change, or production modification 
 | Code/service/config/production changes | NONE | No changes were made. Production remains untouched. |
 
 **Planned order after the element check:** verify selected duration and localStorage; inspect playback GET response headers and transferred size; inspect video element readiness/error state and Console errors; correlate with MediaMTX logs; investigate replay disappearance and frame-step with evidence. Do not download the full media response or change code unless later evidence justifies it.
+
+
+## Addendum — 2026-11-08: Rev.8 browser replay diagnostic observations
+
+| Check | Result | Interpretation / limitation |
+|---|---|---|
+| Replay window selector exists | PASS | `replayWindowSelect` found in DOM. |
+| Selected replay duration | `15000`, label `15s` | UI selection is 15 seconds. |
+| localStorage key | `null` | No saved value at `judoReplayKit.windowSelect`; this does not explain 25.001s. |
+| Fresh Network log after clicking Instant Replay | One playback GET | URL remained the same archived request from 2026-11-07, not a new recording interval. |
+| Playback GET URL | cam1, start `2026-11-07T12:39:51.760Z`, duration `25.001`, format fMP4 | Duration discrepancy remains unresolved. |
+| HTTP status / Content-Type | `200 OK` / `video/mp4` | HTTP success and MIME type do not alone prove correct playback behavior. |
+| Video element state | `readyState=4`, `networkState=1`, `error=null`, `duration=24.9682` | Browser has media data and recognizes a finite duration; no media error reported at inspection. |
+| Video element follow-up | `paused=true`, `currentTime=24.9682`, `videoWidth=720`, `videoHeight=1280` | Video element is paused at its duration and has recognized 720x1280 dimensions. It may have reached end; whether it played normally or app logic paused it is not yet known. |
+| App's displayed playback status at exact inspection time | NOT RECORDED | Need correlate with `ended` and visible UI. |
+
+**Next read-only checks:** query `v.ended` and inspect the current replay status/overlay. Then read the actual Rev.8 duration calculation and replay-selection code. Do not change code until the 25.001s request construction is understood. No services were restarted and production was not touched.
