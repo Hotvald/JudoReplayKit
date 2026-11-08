@@ -1130,3 +1130,20 @@ The owner clarified that the final Rev.9 specification must ensure:
 6. Keep external destination costs (for example, a user-chosen public streaming platform) separate from JudoReplayKit operation. JudoReplayKit itself must not require a paid destination to ingest, record and replay locally.
 
 This entry adds owner requirements to DECISIONS.md. It does not select RTMP/SRT/another protocol as the final architecture, does not promise PRISM availability on Linux, and does not authorize implementation before the final numbered specification is approved.
+
+
+## 2026-11-08 — Owner answers to Rev.9 scope questions
+
+The owner clarified and confirmed the following for the final Rev.9 specification:
+
+- **Replay look-back:** Accepted 5/10/15/20/30-second choices with 15 seconds default, after clarification that this is the interval immediately preceding the Replay button press and ending at that press time. Example: click at 14:32:10 with 15 seconds selected means 14:31:55–14:32:10. This is the logical user-visible interval; the media/API request may use a different internal span but must present the selected interval accurately.
+- **Frame-by-frame:** Owner selects exact frame stepping (one actual decoded frame forward/backward), not approximate temporal jumps.
+- **Bookmarks:** Must be creatable from inside Instant Replay. Bookmark time must refer to the event/media position being reviewed. Retain 30 seconds pre-roll and 15 seconds post-roll. The specification must describe how post-roll is acquired and when the bookmark becomes fully available.
+- **Recording retention and deletion:** Owner selects no automatic deletion (option C). User manages retention. Any deletion requires explicit approval before files are removed. Low-storage warnings and clear deletion scope are required; automatic cleanup is not authorized.
+- **Two-camera synchronization:** Automatic alignment with an honest indication of measured offset/uncertainty; no unvalidated numeric guarantee.
+- **Network access:** Owner selects local access with optional password protection (option C), provided the password option does not undermine ease of use. The final design must balance simple local operation with safe exposure of management/replay endpoints.
+- **Tournament/mat scope:** Still open. The earlier “one tournament with multiple mats” question was not understood. Before specification freeze, explain with a concrete example whether the software should manage one match/camera pair at a time or several simultaneous mats, each with its own live feeds, recording and replay, under one tournament.
+- **PRISM:** PRISM is to be used on the mobile device or camera that streams video. The owner is not asking to run PRISM on the PC/Linux host. Therefore test the incoming stream from the mobile/camera using PRISM's free supported streaming capability; do not treat desktop PRISM as a JudoReplayKit dependency. OBS can remain a free PC/Linux interoperability/test source where useful. No paid tier or service may be required.
+- **Performance:** Owner agrees to define functional immediacy/independence/return-to-live requirements now and establish exact numeric timing thresholds only after practical tests on a defined reference setup.
+
+No implementation or architecture choice is implied by these answers. The final spec must preserve easy Windows/Linux installation, no mandatory paid dependencies, and protection of all existing production/test installations and recordings. No code or runtime was changed as part of this decision update.
