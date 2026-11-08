@@ -427,3 +427,24 @@ Recommended next design: Instant Replay should discover the latest available com
 
 **Safety status:** This entry records planning and receipt of review material only. No Rev.9 code has been created or applied. Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected; no services were started, stopped, or restarted as part of this documentation update.
 
+
+
+## 2026-11-08 — DeepSeek Rev.9 requirements specification received; review pending
+
+**Source:** Complete Rev.9 Requirements Specification pasted by the user from DeepSeek. **Documentation maintained by:** ChatGPT, at the user's explicit request. **Status:** Design proposal only; not approved for implementation.
+
+- DeepSeek supplied a 12-part specification covering executive summary, technical assessment, functional and non-functional requirements, architecture, Windows/Linux installation, storage, UI, security, acceptance tests, risks/open decisions, and implementation roadmap.
+- The proposal retains the user's established Option A requirement: replay is an overlay over live video, runs independently, and must not interrupt live streaming or continuous recording. It also includes continuous recording, later sequence retrieval, compact bookmarks, two-camera operation, diagnostics, and easier Windows/Linux installation.
+- DeepSeek explicitly states that no code, scripts, configuration, installation, or service changes were made for this specification.
+- The specification is **not approved for implementation**. Its eleven listed decisions remain open unless and until the user explicitly approves them. Recommendations in the document must not be recorded as confirmed product decisions.
+- A critical internal contradiction requires correction before approval: FR-022/FR-023 require a selected 15-second replay request to cover exactly 15 seconds, but Part 5.3 also permits requesting the full archive span and its sample `loadSpan()` flow builds the URL from `span.start` and `span.duration`. The specification must define one unambiguous request contract and align the requirements, architecture, implementation pseudocode, and AT-023/AT-080.
+- The specification's proposed bookmark persistence is incomplete at architecture level: it proposes a server-side `bookmarks.json` as the source of truth, but does not identify a concrete server API/component that safely reads/writes it, handles concurrent clients, performs atomic updates, and enforces access control. A browser-only UI cannot directly write a host file.
+- Network defaults need a more precise split: localhost-only binding for the UI/API/metrics is not the same as RTMP camera ingest. Phones publishing RTMP over the tournament LAN cannot reach an RTMP listener bound only to 127.0.0.1. The specification must separately define RTMP ingress binding/firewall rules and management/UI/API exposure.
+- The recording filename recommendation (omit `.mp4` from `recordPath` because MediaMTX appends it) must be verified against the exact pinned MediaMTX v1.21.3 behavior and a test before being treated as a Rev.9 design fact; Rev.8 actually showed a duplicate `.mp4.mp4` suffix.
+- Other items requiring clarification include: the relationship between bookmark click time and post-roll availability; how two independent cameras achieve the proposed ±500 ms synchronization; the missing bookmark API and concurrency model; the feasibility/meaning of “stop cleanly with no partial write” on disk-full; and the basis for proposed CPU/RAM/latency targets.
+- The unexplained 25.001-second request discrepancy remains a mandatory Rev.9 investigation item. It is not resolved by the specification and must not be marked fixed or explained.
+- The changed Caddy `header_down Location` directive remains unexplained and must be tested as specified; no conclusion has been reached about whether it is required.
+
+**Next gate:** Ask DeepSeek to revise the contradictory/incomplete parts and return a corrected specification. Then review the revised document and obtain the user's explicit approval for each open product decision before implementation. No Rev.9 implementation work is authorized by receipt of the specification alone.
+
+**Safety status:** This is a documentation/review entry only. No source code, scripts, configuration, services, production installation, or Rev.8 test installation were changed.
