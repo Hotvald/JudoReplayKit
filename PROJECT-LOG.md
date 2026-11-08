@@ -977,3 +977,126 @@ Other matters (for example log retention period, bookmark export format, detaile
 - Next: provide the same independent review/consolidation prompt and the same source versions to ChatGPT, Gemini and DeepSeek. Each reviewer must verify source claims, especially `DECISIONS.md`, distinguish facts from recommendations and owner decisions, and return a traceable proposed change matrix plus prioritized owner questions.
 - After comparing the three independent outputs, prepare Draft 0.3 for owner review. Obtain explicit owner approval of a numbered final specification before any implementation plan or code.
 - No Rev.8 diagnostics, repair, Rev.9 code, PoC, installer, configuration or service work was performed. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected and untouched.
+
+
+## 2026-11-08 — Detailed independent synthesis and Draft 0.3 change recommendations (Gemini + DeepSeek)
+
+**Sources:** The complete Gemini and DeepSeek review reports pasted by the owner in this project conversation; the exact Draft 0.2, DECISIONS.md and PROJECT-LOG.md versions fetched from the public repository. **Synthesis:** ChatGPT. **Status:** Analysis added for traceability; this is not an owner decision, not Draft 0.3, and not authorization to implement.
+
+### Source baseline and verified facts
+
+- Review baseline: `REV9-REQUIREMENTS-DRAFT.md`, Draft 0.2, blob SHA `c71035e6f599e6c2d76becd8e762a4ebea5c7745`, commit `cee7c87d84e1dad809438cd66077b80bd9c2a918`.
+- Owner decision source: `DECISIONS.md`, blob SHA `d1ee45a432133d2bff2dea8c5b5bd83e7dd85471`.
+- Log before this additive entry: blob SHA `da1bf120aba59cfd568f3311974001712533fd24`.
+- The current decision file does not contain an approved 10/15/20/30-second replay-duration list. DeepSeek's assertion to that effect is unsupported and must not be treated as an owner decision.
+- Confirmed owner requirements remain: replay overlay independent of live/recording; continuous recording to user-selected tournament storage; compact bookmark control that does not auto-open its drawer; green Live state and “PC IP” wording; easy installation on Windows and Linux; separation of production and test environments.
+- Draft 0.2 remains unapproved. No owner decision is created merely by recording a reviewer recommendation.
+
+### Overall assessment
+
+Both reviewers support continued specification work but do not establish an implementation-ready baseline. The consolidated assessment is **NO-GO for implementation; GO for preparing and reviewing Draft 0.3**. Rev.9 remains a clean, independent implementation from scratch; Rev.8 defects are risk references and acceptance-test inputs, not an inherited architecture.
+
+Draft 0.2's technology-neutral approach should be preserved. Neither review authorizes a choice of SQLite/JSON, IndexedDB exclusion, MSE/rVFC, a specific API route/status code, a PIN, fixed port/interface bindings, Caddy/MediaMTX, a sidecar, a compiled supervisor, or a particular media/container pipeline.
+
+### Corrections and disagreements between the reviews and the source
+
+1. **Replay duration versus retrieval strategy:** The user-visible interval, available duration choices and default need an explicit product decision. However, exact-range retrieval and larger-span retrieval followed by trimming are alternative implementation strategies already permitted by Draft 0.2 Addendum B if the visible logical interval is correct. This is not, by itself, an owner decision. Do not mandate a single request or require container duration to equal the UI selection.
+2. **Automatic deletion:** Gemini's suggestion to delete the oldest recording automatically at a low-space threshold is not approved and conflicts with the rule that no automatic deletion policy is adopted without explicit owner approval. Disk-full behavior must remain OPEN until the owner decides. Any disk-full test must use a disposable virtual/test volume, never the host/system disk.
+3. **I/O priority:** A blanket hard write-priority rule could starve replay reads and undermine the immediate-replay requirement. Specify bounded isolation: ingest/recording must not be starved by replay, while replay must retain a measurable bounded response on the agreed reference system. The scheduling mechanism is technical.
+4. **Crash recovery/media finalization:** Do not promise that a restart can always repair or “finalize the moov atom” after a crash. Require honest classification of complete, in-progress, incomplete, recoverable and unrecoverable media; identify the valid retrievable interval and never advertise a corrupt tail as complete.
+5. **Two-camera synchronization:** A manual flash/clapper can be a reference event, but does not by itself prove the exact camera capture timestamp. Require measured offset, drift, mapping method and uncertainty. The owner must decide whether Rev.9 promises a numeric alignment tolerance or only reports alignment/uncertainty without claiming “synchronized” when evidence is insufficient.
+6. **Frame stepping:** Exact decoded-frame stepping versus best-effort temporal stepping is a genuine capability decision. A UI label such as “approximate” is not a substitute for a working control. A prototype may establish what is feasible before the owner selects the product promise.
+7. **Acceptance-test execution:** “Runnable with current requirements” means the test has no unresolved product/specification choice; it does not mean it can be executed today. All Rev.9 acceptance tests require a Rev.9 candidate build. In particular, tests must not be declared passed against Rev.8/current software. DeepSeek's suggestion that AT-051 or AT-053 can be run against the current setup is not a valid Rev.9 acceptance result. AT-043 also requires an implemented sync disclosure and a suitable measurement setup.
+8. **Technology-specific browser claims:** Requirements should define observable decode, visible-presentation and frame-step behavior. Do not hard-code browser APIs such as rVFC or MSE before the media architecture and supported browsers are selected.
+9. **Scope:** Single-mat/single-tournament/single-operator is a plausible initial product option, not a decision. Multi-mat, tournament and concurrent-operator scope must be explicitly asked of the owner rather than silently deferred to a later revision.
+10. **Reference environment:** A named hardware/browser/network profile and numerical performance thresholds are needed before quantitative acceptance testing. They can be finalized as a Gate B/reference-profile activity if Draft 0.3 preserves the measurement model and clearly marks numeric criteria as provisional.
+11. **Time zones and DST:** Event/archive time must be unambiguous across timezone and daylight-saving transitions. Use an unambiguous instant plus display-timezone context as the logical requirement; do not prescribe a database or timestamp serialization prematurely.
+12. **Camera identity/reconnect:** A different physical camera must not silently inherit the identity/history of a previous camera merely because it publishes to the same logical path. Require an explicit configured logical identity and surface identity changes or uncertainty.
+13. **Multi-tab/client behavior:** Silent conflicting writes or one tab unexpectedly controlling another must be prevented. Whether simultaneous operators are supported is an owner scope decision; a single-controller policy is only a candidate, not adopted.
+14. **Licensing:** Compliance with third-party licenses and redistribution terms is a release requirement. The actual component/license inventory is a pre-release verification task, not an architecture decision in this review.
+
+### Missing or under-specified requirements and recommended treatment
+
+| Area | Draft 0.3 treatment | Decision timing |
+|---|---|---|
+| Replay interval semantics | Define the user-visible interval and how selected start/end are verified separately from request/container span. Keep retrieval strategy open. | Gate A for duration choices/default; technical strategy later |
+| Bookmark contract | Define stable logical ID, source/event time, per-camera mapping/uncertainty, persistence guarantee, validation, duplicate/idempotent retry, concurrency and recovery. Keep storage format/database open. | Gate A logical guarantees; implementation technology later |
+| Archive query outcomes | Distinguish no matching data, invalid query, unavailable archive, incomplete segment, corrupt/unreadable media and internal failure. | Specify now |
+| Recording lifecycle | Define segment states, clean close, interrupted shutdown, restart discovery and the valid retrievable range. Do not promise universal crash repair. | Specify now; validate in prototype |
+| Camera reconnect/identity | Define new session/boundary on reconnect and prevent silent identity substitution. | Specify now |
+| Disk full/removal/slow storage | Detect destination loss and write stalls, surface recording degradation, mark affected segments incomplete, and preserve replay/live failure isolation. Do not auto-delete by default. | Detection/marking now; owner policy Gate A |
+| I/O contention | Require no ingest/recording starvation and bounded replay responsiveness under concurrent load. | Specify now; numeric thresholds after reference profile |
+| Endpoint security | Separate ingest, UI, replay/media, management and metrics/diagnostic exposure; specify authorization expectations without selecting binding/auth technology. | Gate A |
+| Synchronization | Record offset, drift, reference method, capture-time evidence and uncertainty; distinguish aligned from approximate/unknown. | Measurement model now; tolerance Gate A |
+| Health states | Each state must include evidence source, last-success/last-change time, freshness, timeout and stale/unknown handling. Keep camera-connected, frames-arriving, live-presented, recording-progress, archive-query, replay-decoded, replay-visible and storage-health separate. | Specify now |
+| Logs/privacy | Require rotation/bounded growth, secret redaction and privacy-safe diagnostic export. | Core rules now; retention/size Gate B |
+| Tournament/mat lifecycle | Define session close/seal/reopen and data separation; decide initial single/multi-mat, tournament and operator scope. | Scope Gate A; detailed workflow Gate B |
+| Time/DST | Define unambiguous event instants and display timezone; test repeated/skipped local times. | Logical rule now; display policy Gate B |
+| Browser tabs/clients | Prevent silent concurrent-write/control conflicts; specify visible conflict/error handling. | Core rule now; concurrent operator scope Gate A |
+| Display/touch/accessibility | Require primary controls to be usable on the supported display/input classes; do not invent pixel values without device profile. | Basic requirement now; detailed targets Gate B |
+| Windows/Linux/lifecycle | Preserve confirmed easy-install requirement on both platforms; define supported versions/browser matrix and start/stop/update/rollback expectations. | Support matrix Gate A; installer mechanism later |
+| Export/backup | State whether bookmark/log export/import and recording backup are required for initial release; if deferred, document recovery/portability limits. | Gate B unless owner requires it at launch |
+| Licensing | Require license/redistribution review before packaging/release. | Before release |
+
+### Acceptance-test classification — preliminary mapping
+
+The categories below classify specification readiness, not present-day execution. **A** = sufficiently specified to execute against a future Rev.9 build without a further Gate A product decision. **B** = blocked or materially affected by an owner decision. **C** = needs a prototype, reference hardware/browser, multi-camera rig, disposable storage or other controlled test environment. A test may appear in both B and C.
+
+- **A — requirements sufficiently defined:** AT-001, AT-002, AT-003, AT-012, AT-015, AT-016, AT-020, AT-021, AT-030, AT-031, AT-042, AT-053, AT-054, AT-060, AT-074. This is a preliminary classification; confirm the exact pass criteria in Draft 0.2 before marking any test fully unblocked. AT-053 must be run on Rev.9, not Rev.8.
+- **B — owner decision required:** AT-004 (return-to-live target), AT-010 (duration choices/default and visible interval), AT-011 (search horizon), AT-013 (seek accuracy), AT-014 (frame-step promise), AT-032 and AT-033 (bookmark post-roll/availability), AT-034 and AT-035 (client concurrency and interrupted/idempotent writes), AT-040 and AT-041 (sync criteria), AT-043 (what “aligned” may be claimed), AT-050 (ingest exposure), AT-051 (management exposure), AT-052 (authorization), AT-061 (low-space threshold), AT-062 (disk-full policy), AT-063 (retention/deletion), AT-070 and AT-071 (supported platform/installation matrix), AT-072, AT-073, AT-075 and AT-076 (installation/update lifecycle), AT-080 (duration contract), AT-082 (archive horizon/search semantics), AT-085 (bookmark time mapping convention), AT-087 (bookmark API/concurrency contract), AT-090 (frame-step truthfulness).
+- **C — prototype/reference environment or controlled rig required:** AT-005 (failure injection/isolation), AT-022 (interrupted shutdown/recovery), AT-023 (runtime/media/file naming semantics), AT-024 (long-run/reference hardware), AT-040 and AT-041 (repeatable synchronization rig), AT-042 (multi-camera rig where applicable), AT-043 (implemented sync disclosure), AT-061 and AT-062 (disposable virtual volume), AT-064 (storage/recovery test setup), AT-070 and AT-071 (clean OS virtual machines), AT-081 (proxy/HLS or selected transport regression on the Rev.9 architecture), AT-083 (decoded-frame and visible-presentation evidence), AT-084 (end-to-end timing instrumentation), AT-086 (health evidence/freshness implementation), AT-088 (failure-containment prototype), AT-089 (sync measurement rig), AT-090 (frame-step prototype).
+- **Not runnable today:** None of the above should be reported as a passed Rev.9 test until a Rev.9 candidate exists. Tests marked A are only specification-ready. The test IDs and their exact titles/pass conditions remain governed by Draft 0.2; Draft 0.3 should add a test-by-test matrix with prerequisites, evidence, safe setup and status (not run/pass/fail/blocked).
+
+### Gate A / Gate B / deferred owner decisions
+
+**Gate A — resolve before approving an implementation baseline:**
+1. User-visible replay interval semantics, initial duration choices and default. This does not choose the underlying retrieval strategy.
+2. Frame-step capability promised to the operator (exact decoded frame or best-effort temporal step).
+3. Bookmark logical contract and persistence guarantee, including event-time mapping, duplicate/retry behavior and the required pre/post-roll policy or configurability.
+4. Disk-full, destination-removal and write-stall policy, including explicit deletion boundary. Automatic deletion remains unapproved unless the owner expressly opts in.
+5. Exposure and authorization policy for ingest, UI, replay/media, management and metrics.
+6. Two-camera synchronization promise: numeric tolerance or an honest uncertainty-only/approximate status; supported camera/capture conditions.
+7. Initial supported Windows/Linux versions, browser and camera matrix sufficient to define product support.
+8. Initial scope: number of mats, tournaments and simultaneous operators. Do not assume single-mat/single-operator.
+9. Any numeric performance promise that the UI or acceptance tests will claim. If values are not yet chosen, explicitly keep them non-binding and require a Gate B reference-profile decision before quantitative acceptance.
+
+**Gate B — decide before quantitative validation/release, but not necessarily before the logical spec can be approved:**
+- Reference PC/CPU/GPU/RAM/storage, display, browser versions, network topology and camera configuration.
+- Numeric replay-open, seek, return-live, recording-stall and low-space thresholds with measurement procedure.
+- Log retention/size limits, export format, bookmark export/import and backup policy.
+- Detailed touch/display dimensions, contrast and accessibility targets.
+- Detailed multi-tournament/multi-mat workflow if initial scope is narrower.
+- Installer packaging, update/rollback mechanism, launcher versus supervisor, storage/database/media technologies and preload/cache strategy.
+- Third-party component/license inventory and redistribution review before release.
+
+**Deferred only by explicit scope statement:** Audio behavior, advanced zoom limits, multi-operator collaboration, export/import, and other secondary features may be deferred if their absence is clear and does not compromise the core replay/recording/safety requirements. Deferral must not silently remove data portability, privacy, recoverability or future extensibility needs.
+
+### Recommended Draft 0.3 change set
+
+1. Add a source/version traceability table for Draft 0.2, DECISIONS.md and the historical FR-022/FR-023 reference; retain the correction that no 10/15/20/30-second owner decision exists.
+2. Clarify in the replay section the user-visible logical interval, selectable values/default as OPEN, and the distinction between requested interval, API span, media/container interval and visible frames. Preserve exact-range and larger-span-plus-trim as technical alternatives.
+3. Add a Gate A/Gate B/deferred register with owner decision status and rationale.
+4. Add logical bookmark identity, timestamp mapping, persistence, idempotency, concurrency, validation, error and recovery contracts without prescribing database/file format.
+5. Add explicit archive query error/outcome taxonomy and segment complete/in-progress/incomplete/corrupt states.
+6. Add application lifecycle and interrupted-shutdown/restart requirements; do not promise repair of every interrupted media file.
+7. Add camera identity, reconnect and new-session boundary requirements.
+8. Add storage removal, slow-write, disk-full and I/O contention requirements; prohibit destructive test execution on host/system volumes.
+9. Add endpoint exposure/authorization matrix while leaving binding addresses, ports and auth mechanism open.
+10. Add synchronization evidence, offset/drift/uncertainty and aligned/approximate/unknown states; keep numeric tolerance open for owner decision.
+11. Add health evidence/freshness/timeout and stale/unknown state rules.
+12. Add log rotation, privacy redaction and bounded-growth requirements; keep exact retention period open.
+13. Add multi-tab/client and tournament/mat scope questions, plus explicit session lifecycle.
+14. Add unambiguous event-time/timezone/DST semantics.
+15. Add Windows/Linux/browser/camera support matrix and app lifecycle expectations while preserving the already-confirmed Windows/Linux easy-install requirement.
+16. Add display/touch usability requirements without unsupported pixel thresholds.
+17. Add licensing/redistribution compliance as a pre-release requirement.
+18. Rework the acceptance-test appendix into a row-per-test matrix: test ID/title, requirement trace, A/B/C status, owner decision dependency, prototype/environment, safe procedure, evidence, pass/fail criteria and status. Add new tests for removable storage, write stalls, DST, concurrent tabs/clients, camera identity/reconnect, app crash/restart and log/privacy behavior as appropriate.
+19. Keep all technology/architecture proposals explicitly non-normative until selected through a separate architecture evaluation.
+
+### Decision and safety record
+
+- This entry records recommendations and analysis only. It does not alter Draft 0.2 or DECISIONS.md and does not create owner decisions.
+- Draft 0.3 has **not** been created by this entry.
+- No Rev.8 diagnostic, repair, PoC, Rev.9 code, installer, configuration or service action was performed.
+- Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected and untouched.
+- The next work item is to use this change matrix to prepare Draft 0.3 for owner review. Implementation remains prohibited until the owner explicitly approves a numbered final specification.
