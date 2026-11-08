@@ -388,3 +388,16 @@ DeepSeek's full independent Rev.8 review was supplied by the user. It explicitly
 5. Test again with mobile camera OFF to preserve archive-only conditions.
 
 No service restart, config change, retention change, or production modification authorized or performed. DeepSeek review remains pending; it must be given these updated observations and must not be told it has read GitHub unless logs are supplied to it.
+
+
+## Addendum — 2026-11-08: Read-only diagnostic preparation (not yet executed)
+
+| Item | Status | Evidence / note |
+|---|---|---|
+| DeepSeek received both logs | CONFIRMED | User pasted full PROJECT-LOG.md and TEST-LOG.md contents. DeepSeek confirmed it reviewed the pasted text only and has no GitHub access. |
+| Independent review of current playback failure | REVIEWED | DeepSeek agrees that archive listing works but HTTP 200 from playback GET does not prove decodable media. It lists several possible causes; none is confirmed. |
+| Hard-refresh interpretation | QUALIFIED | Replay returning after refresh does not by itself prove a JavaScript-state fault; refresh also resets the video element and browser media state. |
+| First next diagnostic | PENDING | In Chrome DevTools Console, run `document.getElementById('replayWindowSelect')` with the Rev.8 test app open. Instant Replay should remain unopened for this initial element-existence check. User has not yet supplied the result. |
+| Code/service/config/production changes | NONE | No changes were made. Production remains untouched. |
+
+**Planned order after the element check:** verify selected duration and localStorage; inspect playback GET response headers and transferred size; inspect video element readiness/error state and Console errors; correlate with MediaMTX logs; investigate replay disappearance and frame-step with evidence. Do not download the full media response or change code unless later evidence justifies it.
