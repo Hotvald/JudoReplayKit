@@ -786,3 +786,20 @@ They are not a list of Rev.8 repairs to implement.
 - Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No services are to be started, stopped, or restarted as part of this specification work.
 
 **Next deliverable:** Rev.9 — complete requirements specification, draft for independent review; not yet an approved implementation contract.
+
+
+## 2026-11-08 — Rev.9 requirements specification draft 0.1 created
+
+**Source:** ChatGPT synthesis of confirmed owner decisions, repository history, Rev.8 known issues/test records, and the previously recorded independent reviews. **Status:** DRAFT FOR INDEPENDENT REVIEW — NOT APPROVED FOR IMPLEMENTATION.
+
+- Added `REV9-REQUIREMENTS-DRAFT.md`, a technology-neutral draft for a new Rev.9 implementation from scratch.
+- The draft separates confirmed requirements, derived requirements, proposals, open owner decisions, Rev.8 observations and hypotheses.
+- It covers live/camera behavior, independent replay overlay, continuous recording/archive, bookmarks and post-roll, two-camera synchronization, network/security, English UI, Windows/Linux installation, storage/recovery, logical component boundaries, diagnostics, performance measurement, acceptance tests and implementation gates.
+- The historic 15-second UI versus 25.001-second request discrepancy is retained as an unresolved requirement/test issue (AT-080); it is not assumed fixed.
+- The draft does not select a technology stack, retention/deletion policy, authentication model, supervisor architecture or numeric performance targets.
+- All acceptance tests are marked NOT RUN until evidence is recorded.
+- The draft is intended to be sent unchanged to DeepSeek and Gemini for independent review. Reviewer findings should be recorded with attribution and section/requirement references; disagreements must not be silently merged.
+
+**Authorization boundary:** This is specification work only. No Rev.8 repair, Rev.9 coding, PoC, installer, configuration, service or local installation change is authorized. Production `D:\JudoReplayKit` and Rev.8 test `D:\JudoReplayKit_Rev8_Test` remain protected.
+
+**Next step:** Obtain independent DeepSeek and Gemini reviews of the exact draft, consolidate findings, resolve owner decisions, then submit a revised numbered specification for explicit owner approval before architecture/implementation planning.
