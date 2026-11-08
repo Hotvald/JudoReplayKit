@@ -23,3 +23,21 @@ Status snapshot: 2026-11-06. These are reported or previously observed issues, n
 - Separate confirmed reproduction from static-code observations and hypotheses.
 - Consolidate related issues before proposing a repair.
 - Do not change the production installation.
+
+
+## Addendum — 2026-11-08: Issues and design gaps found in static Rev.8 package review
+
+These are source/configuration observations, not all reproduced runtime failures.
+
+| ID | Issue / gap | Status and Rev.9 implication |
+|---|---|---|
+| JR-13 | Windows-only installation assumptions | CONFIRMED IN PACKAGE. Absolute Windows paths and PowerShell-only scripts; no Linux setup. Rev.9 must support easy Windows and Linux installation. |
+| JR-14 | Recording health is not demonstrated by UI | STATIC OBSERVATION. “Configured” is not equivalent to actively recording. Show verified backend/file health, errors and disk state. |
+| JR-15 | Bookmark persistence/association is browser-local | STATIC OBSERVATION. localStorage and fixed camera: 0 metadata do not provide a robust shared tournament event model. |
+| JR-16 | Bookmark creation expands drawer | SOURCE CONFIRMED. Conflicts with the product decision that creating a bookmark must not open the drawer. |
+| JR-17 | Seek completion is not explicitly awaited | STATIC OBSERVATION. loadSpan sets currentTime after canplay but does not explicitly await seeked/presented frame before continuing. Validate with deterministic playback tests. |
+| JR-18 | Frame-step can be approximate | SOURCE CONFIRMED. Fallback uses 1/30 second when a neighboring recorded frame timestamp is unavailable; exact frame-step is not guaranteed. |
+| JR-19 | Network service exposure needs security design | STATIC OBSERVATION. Rev.8 test MediaMTX listeners bind wildcard interfaces, including API/metrics. Define least-privilege binding, access control and firewall requirements. |
+| JR-20 | Stop script path-boundary validation | STATIC OBSERVATION. Raw StartsWith(testRoot) should be replaced by normalized path-with-directory-boundary validation before treating it as a strong safety guard. |
+
+The Rev.8 archive also contained `auto.key`. Keep private keys out of future source bundles, public repositories and releases. Runtime logs and server executables were not included, so their behavior remains outside this static review.
