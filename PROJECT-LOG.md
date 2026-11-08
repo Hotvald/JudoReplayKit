@@ -1,6 +1,6 @@
 # JudoReplayKit — Project Log
 
-Last updated: 2026-11-07
+Last updated: 2026-11-08
 
 ## Purpose
 
@@ -555,3 +555,78 @@ Each recommendation should:
 No reviewer is authorized to revise Rev.9 or implement code merely by providing this recommendation. The owner will decide after comparing all three responses.
 
 **Safety status:** This entry records Gemini's peer-review response and the next review request only. No source code, configuration, services, or installation files were changed. Production `D:\\JudoReplayKit` and isolated Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No service was started, stopped, or restarted.
+
+
+## 2026-11-08 — Three-reviewer implementation-readiness decision: CONDITIONAL GO for read-only diagnostics only
+
+**Sources:** The owner supplied the complete implementation-readiness recommendations from DeepSeek and Gemini. ChatGPT's independent recommendation was already given in the project conversation. **Documentation maintained by:** ChatGPT, at the owner's request. **Status:** Review decision and next-step recommendation; no new test has been run and no implementation is approved.
+
+### Consolidated decision
+
+All three reviewers converge on the same practical boundary:
+
+- **CONDITIONAL GO** for a narrowly scoped, read-only diagnostic phase in the isolated Rev.8 test environment.
+- **NO-GO** for full Rev.9 application coding or treating the current Rev.9 specification as an approved implementation baseline.
+- No reviewer recommends beginning a broad rewrite, new application architecture, supervisor, persistence layer, or installer implementation now.
+
+The term “implementation” must not blur three different levels:
+1. **N1 — Read-only diagnostics:** inspect and record existing files, hashes, browser requests/responses, media state, and runtime behavior without changing files or services. Approved as the next activity.
+2. **N2 — Isolated proof of concept:** a disposable, separate experiment for one defined technical question. Not approved yet; first complete the relevant N1 diagnostics and obtain the owner's explicit approval.
+3. **N3 — Full Rev.9 implementation:** application architecture, product code, persistence, supervisor, installers, and cross-platform build. Not approved; blocked by unresolved Rev.8 behavior, specification gaps, and owner decisions.
+
+### DeepSeek recommendation (as supplied by the owner)
+
+DeepSeek gave **CONDITIONAL GO for N1 only**, and NO-GO for N2 until the relevant diagnostics are complete and for N3 until the blockers are resolved. It identifies the following high-priority unresolved matters:
+- The observed 25.001-second playback request while the UI selection was 15 seconds.
+- The unexplained Caddy `header_down Location ^/ /hls/` directive.
+- The fMP4 initialization/moov hypothesis, which requires actual payload and decoder evidence.
+- Runtime verification of the request-end / span-acceptance boundary behavior.
+- Replay video disappearance and the pause/seek/frame-step behavior.
+
+DeepSeek also identifies specification corrections needed before implementation: the FR-022/FR-023 versus Part 5.3 replay-duration contract; a concrete server-side bookmark API and concurrency/atomic-write model; separate RTMP-ingress and management/UI network-binding rules; verification of MediaMTX v1.21.3 filename behavior; a credible two-camera synchronization mechanism; and realistic disk-full/recovery behavior. Retention, deletion, platform support, installer technology, network exposure, authentication, clock policy, Caddy directive, and video preload remain owner decisions or unresolved design questions.
+
+DeepSeek's proposed first sequence is E1 (source identity/hash check), then E2/E3 (duration and media-delivery diagnostics), followed by the remaining behavioral tests. It explicitly says that an unexpected E1 version result should stop the sequence pending source identification.
+
+### Gemini recommendation (as supplied by the owner)
+
+Gemini gave **NO-GO for full application coding** and **CONDITIONAL GO for targeted PoC/read-only diagnostics**. It independently identifies the playback/decode mismatch, time-boundary behavior, 25.001-second discrepancy, Caddy directive provenance, and launcher-versus-supervisor decision as unresolved.
+
+Gemini's proposed Test A inspects the actual playback payload and MP4 atom structure. Its proposed Test B suggests adding console logging to `app.js`; that would modify the test installation and is therefore **not included in the approved read-only phase**. If additional instrumentation later proves necessary, it must be proposed as a separate, minimal test-only change and explicitly approved by the owner first.
+
+Gemini also agrees that a simpler launcher proof of concept should be evaluated before assuming a compiled JudoCore supervisor is necessary. Neither supervisor nor launcher architecture is approved at this point.
+
+### ChatGPT recommendation
+
+ChatGPT's recommendation is **CONDITIONAL GO for read-only diagnostics and NO-GO for Rev.9 coding**, matching the common position of DeepSeek and Gemini.
+
+ChatGPT recommends beginning with **E1 only**: identify and hash the exact files in the running/reviewed Rev.8 test package, including `app.js`, `index.html`, Caddy configuration, and MediaMTX runtime configuration, and record the relevant MediaMTX version. If the installed/tested files do not match the package/version under review, stop and reconcile the source identity before proceeding.
+
+After E1 is confirmed, proceed to E2 and E3: observe the selected replay duration against the actual browser request and inspect playback response headers, range behavior, payload structure, and browser media/decoder state. Do not download an unnecessarily large recording body. Then plan E4–E6 for pause/seek/frame-step, two-camera synchronization, and recording continuity during replay, using observation only and without restarting services.
+
+### Consolidated blockers and evidence discipline
+
+The following remain unresolved and must not be described as fixed:
+- The 25.001-second request versus 15-second UI selection.
+- Whether the returned fMP4 data is complete and successfully decoded/presented; HTTP 200, Content-Type, or `readyState: 4` alone do not prove visible playback.
+- The cause and necessity of the Caddy `header_down Location` directive.
+- Runtime behavior after the Rev.8 Option A time-window change.
+- Replay disappearance, pause, seeking, frame stepping, and return-to-live behavior.
+- Actual two-camera synchronization.
+- Recording continuity during concurrent replay.
+- The duplicate `.mp4.mp4` filename and exact MediaMTX filename semantics.
+
+The current Rev.9 specification remains a useful review proposal, **not an implementation contract**. Its contradictions, incomplete interfaces, unverified assumptions, and owner decisions must be resolved and recorded before N3. Recommendations from reviewers are not product decisions. No proposed retention/deletion threshold, authentication policy, performance target, network default, installer technology, or supervisor architecture is approved by this entry.
+
+### Approved next action and safety boundary
+
+**Next action: E1 only.** Prepare/run a read-only PowerShell inspection that calculates hashes and records version/file identity for the exact Rev.8 test files. Do not proceed to E2 until E1 confirms which package is actually being examined. If identity is inconsistent or uncertain, stop and report the discrepancy.
+
+For this initial diagnostic phase:
+- Production `D:\\JudoReplayKit` must not be touched.
+- Rev.8 test `D:\\JudoReplayKit_Rev8_Test` must not be modified by E1–E6.
+- Do not add console logging or edit `app.js`, HTML, Caddyfile, MediaMTX configuration, scripts, or other files.
+- Do not start, stop, or restart services.
+- Do not delete, overwrite, or move recordings or other files.
+- Any later instrumentation, isolated PoC, repair, or implementation requires a separate proposal and the owner's explicit approval.
+
+**Safety status:** This entry records the three reviewer recommendations and the owner's next-step recommendation only. No local code, scripts, configuration, services, recordings, production installation, or Rev.8 test installation were changed. No diagnostic test has yet been run as a result of this recommendation.
