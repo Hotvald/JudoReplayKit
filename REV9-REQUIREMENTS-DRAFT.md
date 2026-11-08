@@ -1,7 +1,8 @@
-# JudoReplayKit Rev.9 — Requirements Specification (Draft 0.1)
+# JudoReplayKit Rev.9 — Requirements Specification (Draft 0.2)
 
 **Date:** 2026-11-08  
-**Status:** DRAFT FOR INDEPENDENT REVIEW — NOT APPROVED FOR IMPLEMENTATION  
+**Version:** 0.2  
+**Status:** DRAFT FOR OWNER REVIEW AND INDEPENDENT REVIEW — NOT APPROVED FOR IMPLEMENTATION  
 **Purpose:** Define a new, independently implemented application. This is not a Rev.8 repair plan.
 
 ## Document authority and labels
@@ -13,7 +14,7 @@
 - **OBSERVED Rev.8:** Recorded symptom or source observation, not proof of root cause.
 - **HYPOTHESIS:** Possible explanation not yet established.
 
-All acceptance tests are initially NOT RUN. No proposed architecture, numeric target, retention rule, security policy or destructive behavior becomes binding without owner approval.
+All acceptance tests are initially NOT RUN. No proposed architecture, numeric target, retention rule, security policy or destructive behavior becomes binding without owner approval. Draft 0.2 adds explicit timing, time semantics, logical interface, health/failure, synchronization, test-evidence and traceability clarifications. Draft 0.1 remains available in Git history.
 
 ## 1. Purpose, users and operating context
 
@@ -342,3 +343,210 @@ Use section/requirement references. Distinguish facts, assumptions, proposals an
 
 ---
 **Approval status: NOT APPROVED — independent review only.**
+
+
+---
+
+# Draft 0.2 — normative clarifications and additions
+
+The following clauses supplement and, where explicitly stated, refine Sections 1–20 above. They are part of draft 0.2. If a reviewer finds a conflict between an earlier paragraph and this addendum, identify it explicitly; do not silently choose one interpretation. Owner approval is still required.
+
+## A. End-to-end replay timing contract (supplements Sections 4 and 14)
+
+The word “available” is ambiguous unless its endpoint is stated. Rev.9 shall distinguish these events in both design and test evidence:
+
+1. **T0 — User click time:** monotonic client-side timestamp when the replay action is activated. Wall-clock/UTC context may also be logged but must not replace the monotonic measurement.
+2. **Ireq — Requested sequence interval:** logical start/end timestamps requested for replay, with documented time basis and endpoint convention.
+3. **Tavail — Archive availability decision:** time at which the archive service identifies which portion of Ireq is actually present and retrievable. If post-roll is not yet recorded/finalized, the wait is visible and measurable.
+4. **Iapi — API/request interval:** logical interval and camera/session identifiers sent to the archive service. A request may transport a larger media span, but the transport span must be separately recorded.
+5. **Imedia — Actual media/container interval:** timestamps represented by the returned media, including any decode preroll, segment padding or container duration differences.
+6. **Tdecode — First decoded requested frame:** first decoded frame that belongs to the requested logical interval.
+7. **Tvisible — First visibly presented requested frame:** first frame from the requested interval actually rendered in the replay surface. This is the principal user-visible replay-ready event.
+8. **Tlive — Return-to-live completion:** first visibly presented current live frame after the user activates Live.
+
+Required metrics:
+- Click-to-visible replay = Tvisible − T0.
+- Archive decision time = Tavail − T0.
+- Decode/presentation time = Tvisible − time the relevant media becomes available to the player.
+- Return-to-live = Tlive − Live-action time.
+
+These events must be independently observable in diagnostic/test evidence. HTTP 200, a MIME type, media metadata, readyState, decoder initialization or a UI label alone does not prove Tvisible. The visible frame must be shown to belong to Ireq using media timestamps and/or identifiable reference content.
+
+**OPEN:** Numeric thresholds. The owner’s requirement is minimal practical delay, especially for quick decision confirmation. Numeric pass/fail values require a defined reference PC, browser, cameras, network, cache condition and measurement uncertainty. The 1.0-second warm-cache replay and 0.5-second return-to-live figures in Section 14 remain proposals only.
+
+## B. Selected-duration contract and FR-022/FR-023 legacy reference (supplements Section 4.2 and AT-010/080)
+
+The historical Rev.8 observation was a 15-second UI selection with a media request reported as 25.001 seconds. This is a regression input, not proof of a root cause.
+
+The product contract is about the interval the referee actually sees. The eventual design may:
+- retrieve exactly the selected interval; or
+- retrieve a larger containing media span and trim presentation to the selected interval.
+
+Neither transport strategy is mandated here. In either case, the UI/request/media/presented intervals must be separately observable, and the user must never be shown a silently extended interval. Container duration alone is not sufficient proof of correct visible interval.
+
+The earlier review reference to a conflict between FR-022/FR-023 and Part 5.3 cannot be reconciled from the fetched draft 0.1: that file contained no stable FR identifiers and Section 5 was “Continuous recording and archive”, not a Part 5.3 duration contract. Therefore the historical conflict is **unresolved as a source-traceability issue**. Do not treat the new FR-022/FR-023 labels in any later renumbered draft as necessarily identical to the old reference. The owner/reviewer should provide the original text/revision if the precise conflict is to be resolved. Section 4.2 and AT-010/080 remain the current duration-contract locations.
+
+## C. Bookmark time semantics and mapping (supplements Section 6)
+
+The following timestamps are different data, not synonyms:
+
+- **Event time:** when the official activates the bookmark on the client. This records intent and may include network delay.
+- **Server receipt/persistence time:** when the host receives and commits the event.
+- **Camera capture time:** timestamp associated with acquisition of the frame at the camera/media source, if available and trustworthy.
+- **Ingest time:** when the host receives the corresponding frame or packet.
+- **Archive time:** the timeline/index coordinate used to retrieve stored media, mapped to media presentation timestamps and/or capture time.
+
+A bookmark record must preserve the original event timestamp and its source, server receipt time, stable tournament/session and camera IDs, and per-camera mapping information. The mapping must include its method and uncertainty. If exact capture time is unavailable, store the best available estimate and disclose uncertainty; do not claim frame-exact alignment.
+
+The bookmark service must define stable IDs, schema/versioning, validation, authorization, concurrent-write/conflict behavior, persistence acknowledgement, recovery and backup/export interfaces. This is a logical contract only: no database, file format or storage location is selected. A browser-local record may be a cache but cannot be the only durable copy.
+
+**OPEN:** The event-time convention (client click, server receipt, selected frame or another owner-defined convention), pre-roll/post-roll, labels/notes and editing/deletion permissions. The previously discussed approximately 30-second pre-roll and 10–15-second post-roll are not approved defaults.
+
+## D. Logical API and data contracts (supplements Sections 6 and 12)
+
+Before implementation, each logical operation must specify:
+- operation name and purpose;
+- required/optional inputs, units and time basis;
+- validation and authorization;
+- stable output schema and schema version;
+- success, partial, pending, unavailable, conflict and failure states;
+- timeout/cancellation and retry/idempotency behavior;
+- concurrency/version semantics;
+- audit/diagnostic evidence without exposing secrets.
+
+At minimum, logical operations are needed for:
+1. camera/session discovery and health;
+2. start/stop/status of a tournament recording session;
+3. archive query by camera/session/time interval;
+4. retrieval/streaming of the corresponding media;
+5. bookmark create/read/update/delete and state;
+6. storage destination validation and storage health;
+7. application/component health and diagnostics.
+
+These are capability contracts, not a mandate for REST, a particular route naming convention, process topology, language or database. A replay request must not have side effects on recording state. Archive query failure must not mutate or invalidate recording data.
+
+## E. Health model and evidence (supplements Sections 3, 5, 9 and 13)
+
+The following are separate health dimensions and must not be collapsed into a single green lamp:
+
+- **Camera connected:** transport/session is connected.
+- **Frames arriving:** recent frames/packets are received.
+- **Live frames presented:** current frames are visibly rendered in the live surface.
+- **Recording writes progressing:** actual media bytes/segments are being written and finalized as expected.
+- **Archive query available:** the archive service can answer a valid query.
+- **Replay decoded:** decoder has produced a frame in the requested interval.
+- **Replay visibly presented:** that frame is actually visible in the replay surface.
+- **Storage healthy:** destination is writable and within the approved storage policy.
+
+Each state includes evidence source, last-success time, freshness/timeout rule and error. A connected camera does not prove frames are arriving; arriving frames do not prove live presentation; an open recording file does not prove writes are progressing; successful HTTP does not prove visible replay. The UI must show the relevant dimension and avoid claiming more than the evidence establishes.
+
+## F. Failure containment and recovery (supplements Sections 2, 12 and 13)
+
+For each logical component, the architecture/operations design must state dependencies, failure signals, containment boundary, recovery action, retry/backoff behavior, state reconciliation, user-facing status and evidence retained.
+
+Minimum containment expectations:
+- Replay/player/decoder failure cannot stop or restart ingest or recording.
+- One camera failure cannot stop the other camera.
+- Archive query/index failure cannot delete or rewrite media.
+- UI failure cannot stop recording.
+- Storage write failure must change recording health explicitly; completed segments are preserved where possible and incomplete segments identified.
+- Recovery must not repeatedly restart a healthy component or silently present missing intervals as continuous footage.
+
+Recovery timing and retry values remain open until the reference platform and failure model are defined.
+
+## G. Two-camera synchronization measurement (supplements Section 7 and AT-040–043)
+
+A shared UTC clock is not proof of frame alignment. The synchronization assessment must distinguish:
+- camera clock offset;
+- clock drift over elapsed time;
+- capture timestamp accuracy;
+- ingest delay;
+- encoder/transport delay where measurable;
+- actual corresponding-frame offset;
+- measurement uncertainty/confidence.
+
+The test must use a defined common reference event visible to both cameras, document how corresponding frames are selected, measure offset at the start and after an owner-approved sustained duration, and report uncertainty. A manual marker is only a calibration aid unless the system proves that it is associated with the actual captured frame/time on each camera.
+
+**OPEN:** Required tolerance (±500 ms was discussed but is not approved), calibration procedure and UI presentation of uncertain alignment.
+
+## H. Frame-step capability and UI truthfulness (supplements Section 4.3 and AT-014)
+
+The chosen implementation must declare one of these capability levels after technical evaluation:
+- **Exact decoded-frame step:** each action presents the immediately adjacent decoded frame in the requested direction, with documented behavior for variable frame rate and keyframe boundaries.
+- **Best-effort temporal step:** action seeks to a defined target time; the actual presented frame may differ, and UI/help text must state this accurately.
+
+A best-effort label is not a substitute for a functioning control. Tests must verify actual frame/timestamp movement, direction, repeatability and behavior at start/end of media. The capability level remains OPEN until the media/browser pipeline and support matrix are selected and tested.
+
+## I. Test evidence and reference environment (supplements Section 15)
+
+Every executed acceptance-test record must include:
+- Test ID and requirement IDs covered.
+- Build/version and cryptographic hash.
+- Date/time/timezone, operator and test environment identifier.
+- PC hardware, OS, browser and relevant driver versions.
+- Camera make/model/app, resolution/frame rate and encoding settings.
+- Network topology and measured conditions.
+- Storage device/filesystem and free-space state.
+- Preconditions and exact reproducible steps.
+- Expected and observed results.
+- Measurement method, raw values and uncertainty.
+- Logs, request/response traces, decoded-frame/presentation evidence and relevant screenshots/screen recording.
+- Pass, Fail, Blocked or Not Run status, with deviations.
+
+For tests of visible replay, include proof of decoded and visibly presented frames from the requested interval. HTTP status, Content-Type, Content-Length, readyState or container duration alone is insufficient. For recording, include actual write progression and later archive/decode verification. For sync, include reference event, offset/drift calculation and uncertainty.
+
+Before numeric targets are binding, define a reference profile: PC CPU/RAM/GPU/storage, OS, browser, camera devices/settings, number of cameras/clients, network path/conditions, storage filesystem, cache condition, clock source and instrumentation. Until then, timed tests may be executed exploratorily but cannot be declared passed against invented thresholds.
+
+## J. Additional explicit acceptance checks
+
+The existing AT catalogue remains in force. The following clarify required evidence and add checks:
+
+- **AT-084 — Replay timing trace:** Record T0, Ireq, Tavail, Iapi, Imedia, Tdecode and Tvisible for repeated replay actions. Pass only when all events are distinguishable and visible presentation is tied to the requested interval.
+- **AT-085 — Bookmark time mapping:** Create bookmarks from a known common event; preserve client event time, server receipt time and per-camera mapping/uncertainty. Pass only when retrieved frames correspond within an owner-approved tolerance or uncertainty is honestly reported.
+- **AT-086 — Health-signal independence:** Independently simulate connected/no-frames, frames/no-presentation, recording configured/no-write, archive unavailable and replay decode failure. Pass only when each dimension reports its own evidence and no unrelated green/failed state is inferred.
+- **AT-087 — API concurrency and idempotency:** Repeat a bookmark create request and perform concurrent updates from two clients. Pass only when stable identity, duplicate behavior and conflict handling match the documented contract.
+- **AT-088 — Component failure containment matrix:** In a disposable environment, trigger one fault at a time in UI, replay, archive, one camera and storage. Pass only when unaffected components remain healthy and recovery/reporting matches the documented boundary.
+- **AT-089 — Synchronization uncertainty:** Perform start/end reference-event measurements and compare displayed confidence/uncertainty with measured offset/drift. Pass only when the UI does not claim alignment beyond the evidence.
+- **AT-090 — Frame-step truthfulness:** Verify the declared exact or best-effort capability using decoded frame identities/timestamps. Pass only when observed behavior and UI description agree.
+
+## K. Open decisions retained — no silent defaults
+
+The following remain owner decisions or architecture investigations, not approved choices:
+- retention duration, quota, low-space reserve and deletion eligibility/order;
+- disk-full response (stop, switch destination or delete approved eligible data);
+- Windows/Linux support matrix and CPU architectures;
+- camera platforms, camera count, resolutions and frame rates;
+- live delay, replay duration/default and numeric timing thresholds;
+- exact-range versus larger-span retrieval/trim;
+- preload/cache strategy and resource cost;
+- frame-step precision level;
+- zoom behavior and inputs;
+- audio policy;
+- bookmark pre-roll/post-roll, event-time convention and permissions;
+- synchronization tolerance/calibration;
+- authentication, pairing and network exposure per endpoint;
+- transport, codec/container and segment duration;
+- installer/package, privilege model, update/rollback;
+- simple launcher versus supervisor;
+- language, database, process topology and persistence format;
+- backup/export/import and diagnostic privacy scope.
+
+No reviewer proposal (including 30-day retention, 10 GB free-space threshold, automatic oldest-first deletion, specific ports, localhost/all-interface binding, a particular database, protocol, codec or supervisor) is an owner decision.
+
+## L. Version 0.2 change summary
+
+Compared with draft 0.1, this revision:
+1. Adds an explicit end-to-end replay timing model from user click through first visibly presented frame and return-to-live.
+2. Clarifies that the user-visible interval, not container duration or request size alone, defines correct replay.
+3. Separates bookmark event time, server receipt, camera capture, ingest and archive time, including mapping uncertainty.
+4. Defines logical API/data-contract expectations without selecting routes, language, database or process topology.
+5. Expands health into independent evidence-based dimensions.
+6. Requires component-by-component failure containment and observable recovery.
+7. Strengthens two-camera synchronization measurement to include offset, drift, actual frame alignment and uncertainty.
+8. Clarifies exact versus best-effort frame stepping and prohibits a label from replacing a functioning control.
+9. Adds reference-environment and evidence requirements for acceptance tests.
+10. Adds AT-084 through AT-090 for timing trace, bookmark mapping, health independence, API concurrency, failure containment, sync uncertainty and frame-step truthfulness.
+11. Explicitly records the legacy FR-022/FR-023 versus Part 5.3 reference as unresolved because the cited identifiers/section were not present in the fetched draft 0.1.
+12. Keeps all unapproved technology, numeric targets, retention and destructive storage policies open.
+
+**Draft 0.2 approval status: NOT APPROVED — owner review and independent review only.**
