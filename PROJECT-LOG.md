@@ -461,3 +461,14 @@ Recommended next design: Instant Replay should discover the latest available com
 - Only after the three-way comparison is complete will the user decide whether DeepSeek should revise the Rev.9 specification and what corrections are required.
 - Until then, no Rev.9 code, scripts, configuration, service, or installation changes are authorized. Production and the isolated Rev.8 test installation remain protected.
 
+
+
+## 2026-11-08 — ChatGPT independent Rev.9 review published for all reviewers
+
+- At the user's request, ChatGPT's preliminary independent technical review of the DeepSeek Rev.9 specification has been published as the separate repository document: `REV9-CHATGPT-REVIEW.md`.
+- The document records ChatGPT's own assessment and 15 principal clarification/correction areas, plus verification cautions and evidence required before implementation approval.
+- It is explicitly labelled preliminary and is **not** the final three-way comparison. Gemini's analysis is still pending.
+- DeepSeek and Gemini can consult the same document in the shared repository. The original DeepSeek analysis remains separately attributed; neither analysis has been overwritten or merged into the other.
+- Once Gemini's analysis is received, the three assessments will be compared point by point, preserving agreement, disagreement, unique findings, and items requiring empirical tests.
+- No Rev.9 implementation or installation changes are authorized by publication of this review. Production and Rev.8 test installations remain protected.
+
