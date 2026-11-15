@@ -2859,3 +2859,31 @@ The direct WebRTC-to-WebCodecs path has a clear standards-compatible bitstream c
 - W3C AVC (H.264) WebCodecs Registration, 8 June 2026: https://www.w3.org/TR/webcodecs-avc-codec-registration/
 - W3C WebRTC Encoded Transform receiver pipeline: https://www.w3.org/TR/webrtc-encoded-transform/
 - W3C WebCodecs codec registry: https://www.w3.org/TR/webcodecs-codec-registry/
+## 2026-11-15 — WebCodecs decoder optimizeForLatency hint for rapid replay output
+
+**Scope:** Review of current WebCodecs VideoDecoderConfig and MDN decoder configuration documentation. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified finding
+
+- `VideoDecoderConfig.optimizeForLatency` is a decoder hint. When true, the selected decoder SHOULD be configured to minimize the number of `EncodedVideoChunk` objects that must be decoded before a `VideoFrame` is output.
+- The specification explicitly notes that user-agent and hardware limitations still apply and some codec bitstreams inherently require a minimum number of input chunks before output is possible. The hint cannot bypass H.264 reference dependencies, IDR requirements, SPS/PPS availability, or MediaMTX's B-frame restrictions.
+- This is a decoder configuration option, not the encoder `latencyMode` setting. Do not confuse `VideoDecoderConfig.optimizeForLatency` with `VideoEncoderConfig.latencyMode = 'realtime'`.
+- The hint may change decoder strategy and throughput/resource trade-offs. Its actual effect must be measured with the same bitstream on each browser/OS/hardware combination.
+
+### JudoReplayKit PoC requirements
+
+1. Include `optimizeForLatency: false` and `true` as separate decoder configurations in the replay decoder benchmark.
+2. Cross each setting with `hardwareAcceleration: 'prefer-hardware'`, `'prefer-software'` and `'no-preference'` where the browser accepts the configuration.
+3. Measure time from first valid IDR input to first VideoFrame output, steady-state decode throughput, CPU/GPU usage, decodeQueueSize, dropped access units, frame output cadence and resource pressure.
+4. Repeat with both cameras simultaneously and the actual camera H.264 profile/GOP. A lower first-output latency on a single synthetic stream is not sufficient if throughput or stability degrades under two-camera load.
+5. Do not call `flush()` after every chunk to force output. Normal continuous replay must keep the decoder configured and feed ordered chunks; flush/reset changes decoder state and requires a new key chunk.
+
+### Assessment
+
+`optimizeForLatency: true` is a low-cost-to-test candidate for the replay decoder and aligns directly with the immediate-first-frame requirement. It is not a replacement for a warm decoder, valid keyframes, or a decoded-frame cache. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs VideoDecoderConfig: https://www.w3.org/TR/webcodecs/
+- MDN VideoDecoder.configure(): https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder/configure
+- W3C WebCodecs issue explaining the latency-versus-throughput motivation: https://github.com/w3c/webcodecs/issues/206
