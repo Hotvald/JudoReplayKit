@@ -2778,3 +2778,53 @@ A dedicated worker owning the replay decoder, bounded copy ring and OffscreenCan
 - MDN transferable objects and ArrayBuffer ownership transfer: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects
 - MDN OffscreenCanvas: https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
 - Chrome WebCodecs worker guidance: https://developer.chrome.com/docs/web-platform/best-practices/webcodecs
+## 2026-11-15 — Candidate direct path: WebRTC encoded receiver transform into a worker-owned WebCodecs replay decoder
+
+**Scope:** Review of the current W3C WebRTC Encoded Transform and WebCodecs specifications and MDN API documentation. This identifies a new topology candidate only; no runtime PoC, local changes, or architecture decision.
+
+### Verified standards behaviour
+
+- A receiver-side `RTCRtpScriptTransform` runs in a dedicated worker between the WebRTC receiver's depacketizer and native decoder. The worker receives `RTCEncodedVideoFrame` objects. The transform can inspect/modify/drop encoded frames; only frames written to the transform's writable side are passed onward to the receiver's native decoder. The W3C processing algorithm permits frames to be delayed or dropped, and the transform output cannot reorder frames.
+- WebRTC encoded-transform Streams backpressure is disabled because WebRTC prioritizes low latency over reliability. A slow worker transform cannot assume that backpressure will pause media production. It must bound its own work and recover from overload.
+- `RTCEncodedVideoFrame.data` is an ArrayBuffer. The current WebCodecs `EncodedVideoChunkInit` includes a `transfer` sequence of ArrayBuffers. If the data ArrayBuffer is included in `transfer`, the user agent MAY create the EncodedVideoChunk's internal media resource by referencing that data rather than copying it; the source ArrayBuffer is detached. This is a possible low-copy bridge from a dedicated replay receiver transform into WebCodecs, but zero-copy is not guaranteed.
+- `EncodedVideoChunk` is immutable and serializable. It can be retained in a worker-owned compressed-history ring while being submitted to a WebCodecs `VideoDecoder`. The actual memory sharing and re-use cost must be measured; the specification allows reference-counted implementations but does not guarantee a particular backend allocation strategy.
+- `RTCEncodedVideoFrame.type` provides `key` or `delta` classification. A key chunk can be decoded without previous frames; delta chunks depend on prior reference frames. The compressed ring must retain complete decode dependencies from a valid keyframe and preserve decode order.
+- The current WebRTC Encoded Transform Working Draft defines `RTCEncodedVideoFrameMetadata.timestamp` as the media presentation timestamp (PTS) in microseconds. The long-standing `RTCEncodedVideoFrame.timestamp` property is marked deprecated/non-standard by MDN; new code must not rely on it. The metadata PTS field's actual browser availability must be feature-tested. If unavailable, derive a source-local monotonic PTS from unwrapped 90 kHz RTP timestamps, while separately retaining receiveTime/captureTime metadata where available.
+- The same WebRTC Encoded Transform specification describes H.264 packetizer expectations such as Annex B NAL units separated by start codes. Actual access-unit framing and parameter-set delivery must still be validated for the chosen MediaMTX/browser path.
+
+### New PoC topology candidate
+
+Use a dedicated, continuously connected MediaMTX WebRTC replay reader per camera, separate from the visible live-view PeerConnection. Attach a receiver-side `RTCRtpScriptTransform` to that replay-only receiver and run the transform in a dedicated worker. In the worker:
+
+1. Read each complete depacketized H.264 encoded access unit and its key/delta type and metadata.
+2. Construct an `EncodedVideoChunk` from the frame data, using the ArrayBuffer transfer list where supported to allow the user agent to avoid a second copy. Do not enqueue the original encoded frame back to the WebRTC receiver's native decoder if this replay-only connection does not need a MediaStream video output; this is a candidate way to avoid a redundant native decode, and must be proven with runtime telemetry.
+3. Retain the immutable chunk and metadata in a bounded compressed ring, preserving the complete keyframe-to-current decode chain, SPS/PPS versions, decode order, PTS and connection epoch.
+4. Feed the same chunk to a dedicated warm WebCodecs VideoDecoder in that worker. Keep a bounded decoded hot cache for instant display/frame-step, with explicit VideoFrame closure on eviction.
+5. Render selected replay frames through a transferred OffscreenCanvas overlay above the separate live-view video element. UI commands and frame-index acknowledgements cross the worker boundary; no pixel data needs to pass through the UI thread.
+
+### Critical qualifications and failure handling
+
+- This is not yet proof that a replay-only RTCRtpReceiver can omit all output frames while remaining a healthy, stable receive path across Chrome, Edge and Firefox. Verify that the PeerConnection remains connected, RTP continues to arrive, transform callbacks continue, and no native decoder allocation is required or triggered.
+- `EncodedVideoChunkInit.transfer` only permits the user agent to reference transferred bytes; the standard says it MAY do so. Measure memory/copy behavior; do not label it zero-copy before evidence.
+- The receiver transform is on the replay connection only. Keep the normal live-view PeerConnection free of this application transform to preserve the live isolation boundary.
+- Since transform backpressure is disabled, bound `VideoDecoder.decodeQueueSize` and all worker queues. If decode falls behind, do not drop arbitrary dependent delta frames and continue as if the stream were intact. Mark a discontinuity, stop feeding dependent frames, recover from the next valid keyframe with required SPS/PPS, and record the gap.
+- Use `getMetadata().timestamp` only when actually present. Do not rely on deprecated `RTCEncodedVideoFrame.timestamp`. RTP timestamps are source-local 90 kHz values and require wrap handling before conversion to microseconds; they are not a common clock between cameras.
+- Test actual Annex B access-unit compatibility, SPS/PPS/multiple PPS, B-frame restrictions in MediaMTX v1.21.3, keyframe recovery, decoder reset, camera reconnect, and MediaMTX restart.
+
+### Required PoC comparisons
+
+- Compare: (A) separate replay PeerConnection + transform + WebCodecs decoder with original frames dropped; (B) separate replay PeerConnection + transform + WebCodecs decoder while also passing originals to native decode; (C) separate replay PeerConnection without transform plus browser-native decode/track processing.
+- For each, measure RTP receive continuity, transform callback cadence, CPU/GPU, native decoder instances if diagnosable, WebCodecs decoder backend, decodeQueueSize, first output time, compressed ring bytes, decoded cache memory, live-view latency and recording continuity.
+- Test both cameras simultaneously and two replay sessions; verify the replay receiver can warm continuously without influencing the visible live PeerConnection or MediaMTX recording.
+
+### Assessment
+
+This is a promising refinement: a replay-only WebRTC connection could deliver encoded access units directly to a worker-owned WebCodecs decoder, potentially avoiding an unnecessary second browser-native decode and keeping all replay work off the UI thread. The possible ArrayBuffer transfer path may reduce extra encoded-data copies, but the standard does not guarantee zero-copy. Dropping frames before the receiver's native decoder is standards-compatible in principle, but actual browser/connection behaviour must be demonstrated. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC Encoded Transform, receiver pipeline, drop/order semantics and disabled backpressure: https://www.w3.org/TR/webrtc-encoded-transform/
+- W3C WebCodecs, EncodedVideoChunkInit transfer semantics: https://www.w3.org/TR/webcodecs/
+- MDN RTCEncodedVideoFrame: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame
+- MDN receiver-side encoded transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
+- MDN deprecated/non-standard RTCEncodedVideoFrame.timestamp: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/timestamp
