@@ -3127,3 +3127,69 @@ This policy separates data preservation from decode performance. It may provide 
 ### Evidence
 
 - RFC 6184, H.264 RTP timestamp field and 90 kHz clock rate: https://www.rfc-editor.org/rfc/rfc6184.html
+## 2026-11-15 — Exact displayed-frame bookmark candidate via requestVideoFrameCallback RTP/NTP metadata
+
+**Scope:** Review of current MDN/WICG `requestVideoFrameCallback()` WebRTC metadata, Chromium's exact implementation path, Web Platform Test expectations, and MediaMTX v1.21.3 RTP/NTP timestamp generation. Source-level analysis only; no runtime PoC or local changes.
+
+### Browser-side findings
+
+- `HTMLVideoElement.requestVideoFrameCallback()` metadata can include `rtpTimestamp`, `receiveTime` and `captureTime` for WebRTC video. `rtpTimestamp` identifies the RTP timestamp of the actual frame sent to the compositor; `mediaTime` is the presentation timestamp of that frame on the video element timeline; `expectedDisplayTime` indicates when the browser expects it to be visible; `presentedFrames` can detect missed callback frames.
+- The WICG Video Frame Request Callback specification says `captureTime` for a remote WebRTC frame is estimated from the RTP timestamp using clock synchronization, with RTCP Sender Reports as one possible method. The metadata is best effort and may be absent if the user agent cannot surface it.
+- Chromium's current implementation (`media_stream_remote_video_source.cc`) copies the incoming WebRTC frame's RTP timestamp into the video frame metadata and sets capture-begin time from the incoming frame's NTP time plus the WebRTC clock offset. `video_frame_callback_requester_impl.cc` exposes RTP timestamp, receive time and capture time through `requestVideoFrameCallback()` metadata.
+- Chromium's WPT for WebRTC `requestVideoFrameCallback()` asserts that `rtpTimestamp` and `receiveTime` are present, and waits for `captureTime` to appear after RTCP round-trip/clock estimation (or earlier if already present). Therefore `captureTime` may be unavailable initially; feature-detect it and do not make initial bookmark capture depend on it.
+- `requestVideoFrameCallback()` callbacks run on the main thread and are not guaranteed to execute synchronously with the compositor; the specification warns callbacks can be delayed by a vsync. The metadata still identifies the frame associated with the callback, but the app must track `presentedFrames`, `expectedDisplayTime` and callback freshness when a bookmark is clicked. Exact click-to-displayed-frame association must be tested under UI load.
+
+### MediaMTX v1.21.3 source-level timestamp correlation
+
+- RTMP publishers are registered with `UseRTPPackets: false` and `ReplaceNTP: true` in `internal/servers/rtmp/conn.go`.
+- `internal/stream/sub_stream_format.go` generates RTP packets from the H.264 access unit and sets their timestamp to `rtpTimeOffset + uint32(u.PTS)`. The random RTP offset is held by the stream format; all readers of that format receive units based on the same timestamp base.
+- `internal/stream/stream.go` writes those same `u.RTPPackets` to RTSP using `WritePacketRTPWithNTP(..., u.NTP)`. The gortsplib server sends the supplied absolute NTP time in periodic RTCP Sender Reports.
+- `internal/protocols/webrtc/from_stream.go` re-packetizes H.264 for each WebRTC reader and adds `u.RTPPackets[0].Timestamp` to the packetizer timestamp. The gortsplib H.264 RTP encoder creates packet headers without setting a timestamp, so its initial timestamp is zero; the resulting WebRTC RTP timestamp is therefore the same base `u.RTPPackets[0].Timestamp` used by the RTSP path for that H.264 access unit.
+- The same WebRTC path calls `WriteRTPWithNTP` with `u.NTP` (plus any packetizer-relative timestamp delta). The RTCP Sender Report therefore maps the WebRTC RTP timestamp to the same MediaMTX NTP time that the recorder receives.
+- For RTMP input, `internal/ntpestimator/estimator.go` anchors the first PTS to `time.Now()` and estimates subsequent NTP from PTS. It reanchors if the computed time is in the future or more than 5 seconds behind the current system time. This NTP is a MediaMTX/server-estimated timeline, not a guaranteed physical camera-capture clock. It is nevertheless the timebase used by MediaMTX recording and WebRTC Sender Reports.
+- `internal/recorder/format_fmp4_track.go` stores `sample.ntp` as segment start NTP and records the matching DTS origin; it checks drift between NTP elapsed time and recording DTS elapsed time, with a 5-second tolerance before resetting the recording timeline.
+
+### Proposed bookmark flow
+
+1. Keep the normal live-view PeerConnection separate from the replay-only PeerConnection/encoded ring. Do not add a heavy application transform to the live path.
+2. Run `requestVideoFrameCallback()` continuously on the visible live `<video>` element. On each callback, retain a compact record containing camera/source epoch, `rtpTimestamp`, `captureTime` if present, `receiveTime`, `mediaTime`, `presentedFrames`, `expectedDisplayTime` and callback time.
+3. When the referee creates a bookmark, bind it to the latest valid displayed-frame metadata, not `Date.now()` and not the newest frame received by the replay reader. This accounts for configured live delay and the browser's jitter/playout buffer because the RTP timestamp belongs to the frame actually sent to the compositor.
+4. Match that raw per-camera RTP timestamp against the replay worker's compressed ring. MediaMTX v1.21.3 source indicates that its RTSP and WebRTC readers for the same path/stream format share the same RTP timestamp base. Validate this across separate PeerConnections and camera reconnects before relying on it.
+5. For archive lookup, use `captureTime` as a candidate server-NTP mapping once it is present and validated. Since MediaMTX's RTMP NTP estimator uses the server clock and the fMP4 recorder uses the same `u.NTP`, this should align the bookmark with the recording timeline. Store the raw RTP timestamp and source epoch as the primary identity; store captureTime/timeOrigin as an absolute-time aid.
+6. If `captureTime` is absent or unreliable, use a local RTSP metadata sidecar as fallback/validation. The gortsplib v5.6.7 dependency used by MediaMTX v1.21.3 provides `Client.PacketNTP(medi, pkt)`, which computes NTP from incoming RTCP Sender Reports. A sidecar can publish `(RTP timestamp, NTP, camera path, epoch)` mapping updates without modifying the MediaMTX recording path.
+7. Compare browser `captureTime` and sidecar `PacketNTP` for matching RTP timestamps over long runs, camera reconnects and NTP estimator reanchors. Record the difference and uncertainty; do not claim true camera capture time or cross-camera synchronization from this alone.
+
+### Important limitations
+
+- `captureTime` is estimated from RTCP Sender Reports and MediaMTX's NTP estimator. For RTMP camera input, this maps to the MediaMTX server-estimated timeline, not necessarily the phone's physical sensor exposure time. This is suitable for matching the bookmark to MediaMTX's own archive if validated, but not proof of true capture-time synchronization between two phones.
+- The browser callback may be delayed relative to the compositor by up to a vsync; track `presentedFrames` and `expectedDisplayTime`, and test bookmark click timing. If the callback is stale or metadata is absent, mark the bookmark time quality/uncertainty rather than silently substituting wall-clock time.
+- Raw RTP timestamps are 32-bit and wrap. Maintain source epochs and wrap-safe mapping; reconnects and MediaMTX stream-format restarts must start a new epoch.
+- The RTP timestamp equivalence between MediaMTX RTSP and WebRTC is source-code-derived for the same path and H.264 stream format. Runtime verification is mandatory, particularly if multiple H.264 formats/profiles are negotiated or MediaMTX changes its packetization implementation.
+- The RTSP sidecar would add a local RTSP reader and loopback traffic. It is a fallback/validation tool, not automatically required if browser captureTime proves accurate and stable.
+
+### Required PoC tests
+
+1. In Chrome and Edge on Windows and Linux, log actual `requestVideoFrameCallback` metadata for remote MediaMTX WebRTC video. Verify `rtpTimestamp`, `receiveTime`, `captureTime`, `mediaTime`, `presentedFrames` and `expectedDisplayTime` presence and semantics.
+2. Compare the live `<video>` callback's `rtpTimestamp` against the replay-only receiver worker's `RTCEncodedVideoFrame.getMetadata().rtpTimestamp` for the same displayed frame. Verify exact matching across separate WebRTC PeerConnections.
+3. Create bookmarks at randomized times, including during fast motion and under UI load. Confirm the selected RTP timestamp identifies the frame actually visible at click time, accounting for callback/vsync timing.
+4. Compare `captureTime` converted through `performance.timeOrigin` with RTSP sidecar `PacketNTP` for the same RTP timestamps. Measure offset, jitter and drift over long sessions.
+5. Repeat across MediaMTX restart, RTMP reconnect, source PTS discontinuity, 32-bit RTP wrap, NTP estimator reanchor and two-camera operation.
+6. Verify that the resulting bookmark NTP selects the correct fMP4 segment and exact media time; compare extracted frame identity/visual content at the bookmark against the live frame.
+
+### Assessment
+
+This is a major improvement to bookmark design. `requestVideoFrameCallback()` can identify the actual frame being presented, including its RTP timestamp, and Chromium can expose an RTCP-SR-derived captureTime. MediaMTX v1.21.3 source indicates that the same RTP timestamp base is used across its RTSP and WebRTC output for the same H.264 stream format, while the NTP reference is shared with recording. The RTSP sidecar remains a useful fallback and independent validation path. This could avoid modifying MediaMTX and avoid adding any heavy processing to the live PeerConnection. However, browser metadata presence, callback freshness, cross-connection timestamp equality and archive alignment still require a runtime PoC. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MDN `requestVideoFrameCallback()` and WebRTC frame metadata: https://developer.mozilla.org/en-US/docs/Web/API/HTMLVideoElement/requestVideoFrameCallback
+- WICG Video Frame Request Callback specification: https://wicg.github.io/video-rvfc/
+- Chromium remote WebRTC video frame metadata: https://chromium.googlesource.com/chromium/src/+/master/third_party/blink/renderer/modules/peerconnection/media_stream_remote_video_source.cc
+- Chromium mapping of metadata to JS callback: https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/video_rvfc/video_frame_callback_requester_impl.cc
+- Chromium WebRTC requestVideoFrameCallback WPT: https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/web_tests/external/wpt/video-rvfc/request-video-frame-callback-webrtc.https.html
+- MediaMTX v1.21.3 RTMP publisher timestamp configuration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/rtmp/conn.go
+- MediaMTX v1.21.3 RTP timestamp generation and RTSP write: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/sub_stream_format.go
+- MediaMTX v1.21.3 WebRTC H.264 RTP timestamp mapping: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
+- MediaMTX v1.21.3 NTP estimator: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/ntpestimator/estimator.go
+- MediaMTX v1.21.3 fMP4 timestamp/segment mapping: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_track.go
+- gortsplib v5.6.7 RTCP SR to RTP/NTP mapping (`Client.PacketNTP`): https://github.com/bluenviron/gortsplib/blob/v5.6.7/client.go
