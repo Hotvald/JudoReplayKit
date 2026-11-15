@@ -1912,3 +1912,45 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - MDN VideoDecoder: https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder
 - MDN RTCRtpScriptTransform: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpScriptTransform
 - MediaMTX WebRTC browser reading: https://mediamtx.org/docs/read/webrtc
+
+
+## 2026-11-15 — WebRTC encoded-frame path and replay-buffer memory review
+
+**Scope:** Follow-up review of the W3C WebRTC Encoded Transform specification, WebCodecs memory model and MDN VideoFrame guidance. Read-only research; no local changes.
+
+### Stronger technical basis for a browser-side encoded-frame tap
+
+- The W3C WebRTC Encoded Transform specification states that a receive-side transform is inserted after the RTP depacketizer and before the browser's decoder. For H.264, the exposed encoded-frame `data` is a series of NAL units in Annex B format; the receiver depacketizer emits frames in encoder output order after RTP reordering.
+- The W3C AVC WebCodecs registration says that when `VideoDecoderConfig.description` is absent, H.264 input is interpreted as Annex B. It also defines each `EncodedVideoChunk` as an access unit containing one primary coded picture. These two specifications therefore describe compatible H.264 representations in principle: a WebRTC receive transform can expose Annex-B encoded pictures that a separate WebCodecs decoder may be able to consume.
+- This is materially stronger evidence than a generic claim that WebCodecs can decode H.264: it identifies a standards-based location to tap complete depacketized encoded pictures without decoding/re-encoding the main live display. It is still not a working integration. A PoC must verify actual browser frame boundaries, key/delta classification, SPS/PPS availability at keyframes, timestamps, decoder configuration, and that copying frames to a second decoder does not starve the primary WebRTC decoder.
+- The transform must pass the original encoded frame through unchanged and in order to the browser's normal receiver decoder. The replay decoder/cache should be independent and bounded. The specification also describes receiver key-frame request support, but whether the selected browser and MediaMTX sender path honours it must be tested.
+
+### Decoded-frame buffer memory risk
+
+- WebCodecs frames can retain substantial system/GPU resources. The WebCodecs specification defines explicit reference management and recommends closing frames when no longer needed; MDN likewise warns that retained VideoFrame objects can consume significant GPU memory.
+- A raw decoded-frame ring for both cameras could therefore be expensive. As a planning estimate only, tightly packed 8-bit 4:2:0 video uses about 1.5 bytes per pixel. At 1920x1080, 30 fps and 15 seconds, this is approximately 1.40 GB per camera or 2.80 GB for two cameras. At 30 seconds, it doubles. RGBA storage would be approximately 3.73 GB per camera for the 15-second example. Actual browser/GPU allocation, stride, alignment, hardware surfaces and shared-resource behaviour vary; these are not measured memory requirements.
+- This estimate argues against assuming that retaining every decoded frame from both cameras for the full look-back interval is affordable. The PoC should measure actual memory on target PCs and compare at least: (a) a full decoded-frame ring; (b) compressed access-unit ring plus a continuously maintained short decoded window; and (c) compressed ring with decode-on-demand from the preceding keyframe. Any strategy must still demonstrate immediate first-frame availability and exact one-frame stepping without delaying live or recording.
+- VideoFrame ownership must be explicit: retain only the frames needed by the replay window, release evicted frames with `close()`, and avoid unnecessary RGBA copies. Rendering may be able to use zero-copy paths such as WebGPU external textures, but this too requires a platform/browser PoC and must not be assumed.
+
+### Updated PoC sequence
+
+1. Establish a working MediaMTX-to-browser WebRTC H.264 receive session on Windows and Linux; record negotiated codec/profile and timestamps.
+2. Add a receive-side `RTCRtpScriptTransform` that copies H.264 Annex-B access units into a bounded test ring while passing every original frame through unchanged. Confirm no live-display or ingest regression.
+3. Feed a copy of those access units into a separate `VideoDecoder` configured for Annex B; verify continuous decoding and keyframe recovery.
+4. Implement a minimal decoded-frame cache and test exact adjacent-frame forward/back navigation, including at buffer wrap and after decoder reset/keyframe loss.
+5. Measure memory, CPU, decode queue depth, frame drops and live latency with two simultaneous cameras. Compare the three buffer strategies above.
+6. Repeat in current Chrome, Edge and Firefox on target Windows/Linux hardware, plus localhost and intended LAN/HTTPS origins.
+
+### Assessment
+
+- The WebRTC Encoded Transform + WebCodecs combination is now a standards-supported and technically credible PoC candidate for a browser-side independent replay path. It remains **unproven** for the complete JudoReplayKit workflow.
+- Key unresolved risks are real-world browser H.264 profile support, keyframe/SPS/PPS handling, timestamps and camera alignment, memory/CPU costs, browser resource pressure, and isolation from the primary live decoder.
+- No architecture or technology choice is approved. Status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
+- W3C AVC WebCodecs registration: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- W3C WebCodecs memory model: https://www.w3.org/TR/webcodecs/#raw-media-interfaces
+- MDN VideoFrame format: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/format
+- MDN WebCodecs API and memory guidance: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
