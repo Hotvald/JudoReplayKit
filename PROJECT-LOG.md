@@ -3238,3 +3238,44 @@ The displayed-frame RTP metadata can provide exact per-camera frame identity for
 - MediaMTX v1.21.3 RTMP publisher sets `ReplaceNTP: true`: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/rtmp/conn.go
 - MediaMTX v1.21.3 NTP estimator anchors each stream independently: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/ntpestimator/estimator.go
 - WICG Video Frame Request Callback WebRTC metadata: https://wicg.github.io/video-rvfc/
+## 2026-11-15 — MediaMTX WebRTC RTCP Sender Report cadence and NTP estimator drift
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 `internal/protocols/webrtc/outbound_track.go`, `internal/ntpestimator/estimator.go`, and recorder drift tolerance. No runtime PoC or local changes.
+
+### Verified findings
+
+- MediaMTX v1.21.3 creates a `rtpsender.Sender` for each WebRTC outbound track with `Period: 1 * time.Second`. The sender generates periodic RTCP Sender Reports using the last RTP timestamp/NTP pair and extrapolates both using elapsed local system time.
+- `OutboundTrack.WriteRTPWithNTP()` sets the packet SSRC, calls `rtcpSender.ProcessPacket(pkt, ntp, true)`, then writes the RTP packet. Thus the RTCP sender learns the exact RTP timestamp and NTP pair supplied for the media packet.
+- For H.264, the WebRTC output path supplies `u.NTP` plus the packetizer-relative timestamp delta and adds the shared MediaMTX stream-format RTP timestamp base. The RTCP Sender Report therefore carries the mapping needed by the receiver to estimate the same MediaMTX NTP time used by the recorder.
+- Chromium's remote WebRTC video source converts the received frame's NTP time (derived from RTCP Sender Reports) into local capture-time metadata. `requestVideoFrameCallback()` then exposes this as `captureTime` when available. The WPT indicates that captureTime may not be present until clock/round-trip estimation has completed; raw `rtpTimestamp` and `receiveTime` are available earlier.
+- MediaMTX's RTMP path sets `ReplaceNTP: true`. Its `ntpestimator.Estimate()` anchors the first PTS to `time.Now()` and then calculates NTP from the PTS delta at the configured clock rate. It reanchors if the computed timestamp is in the future or more than 5 seconds behind current system time.
+- The NTP estimator does not continuously estimate and correct small source clock-rate drift. A small rate mismatch can therefore accumulate into a growing offset until a reanchor condition is reached. The fMP4 recorder separately detects drift between sample NTP elapsed time and DTS elapsed time using `ntpDriftTolerance = 5 seconds`; when exceeded, it resets the recording timeline.
+
+### Consequences for JudoReplayKit
+
+1. The primary Chrome/Edge bookmark path can likely use `requestVideoFrameCallback()` `rtpTimestamp` immediately to identify the exact displayed frame, then use `captureTime` when the browser's RTCP/SR clock mapping is available to locate that frame on the MediaMTX archive timeline.
+2. The 1-second RTCP SR cadence makes this mapping practical without waiting for a segment to close. It does not guarantee captureTime will be present immediately after a new WebRTC connection; keep raw RTP identity and defer NTP resolution or use the sidecar fallback.
+3. An RTSP sidecar using gortsplib `PacketNTP()` remains useful as an independent validation/fallback path. Compare its NTP for a given RTP timestamp with browser `captureTime` converted to the same clock domain.
+4. Store per-camera source epochs and monitor NTP-vs-PTS drift over long tournament sessions. A camera reconnect or MediaMTX reanchor must create a detectable discontinuity, not silently shift old bookmarks.
+5. Cross-camera alignment still cannot be claimed as physical capture synchronization for RTMP sources: each stream's NTP estimator is anchored independently to the server's first-arrival time. The 1-second Sender Report cadence accurately distributes that server-estimated mapping; it does not remove source-to-server latency differences.
+6. Long-duration tests must compare both cameras' per-camera PTS-to-NTP slope and offset. Report measured offset and uncertainty, and detect drift before it reaches MediaMTX's 5-second recorder reset tolerance.
+
+### Required PoC additions
+
+- Verify that browser `captureTime` appears on the actual MediaMTX v1.21.3 WebRTC stream and determine time-to-availability after initial connection and reconnect.
+- For the same H.264 access unit, compare browser callback `rtpTimestamp`/`captureTime` with RTSP sidecar `PacketNTP()` mapping. Record offset, jitter and drift over hours.
+- Simulate source PTS rate drift, PTS jumps, MediaMTX reanchor and reconnect. Verify bookmarks remain attached to the correct per-camera media frame and any mapping discontinuity is surfaced.
+- Verify that the bookmark's `captureTime` corresponds to the fMP4 segment's embedded NTP/DTS mapping, not merely the browser's receive wall clock.
+
+### Assessment
+
+MediaMTX's 1-second RTCP Sender Reports plus Chromium's WebRTC captureTime metadata provide a plausible browser-native RTP-to-archive-NTP mapping. The RTSP sidecar can be retained as a validation/fallback rather than assumed mandatory. The main remaining timing risk is not the RTP/NTP transport mapping within one camera; it is the independent RTMP NTP anchors and possible clock drift between two mobile sources. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 WebRTC outbound track and 1-second RTCP sender cadence: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
+- MediaMTX v1.21.3 RTMP publisher NTP replacement: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/rtmp/conn.go
+- MediaMTX v1.21.3 NTP estimator: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/ntpestimator/estimator.go
+- MediaMTX v1.21.3 recorder drift tolerance: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/recorder.go
+- Chromium remote WebRTC video frame NTP/captureTime mapping: https://chromium.googlesource.com/chromium/src/+/master/third_party/blink/renderer/modules/peerconnection/media_stream_remote_video_source.cc
+- WICG WebRTC requestVideoFrameCallback metadata: https://wicg.github.io/video-rvfc/
