@@ -3865,3 +3865,36 @@ This is a material operational requirement for the HLS/WebCodecs candidate. The 
 - MediaMTX v1.21.3 HLS muxer lifecycle, on-demand activity timer and instance recreation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
 - MediaMTX v1.21.3 HLS muxer instance close/reader lifecycle: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
 - MediaMTX v1.21.3 configuration defaults (`hlsAlwaysRemux=false`, `hlsMuxerCloseAfter=60s`): https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+## 2026-11-15 — MP4Box.js incremental sample extraction: discardMdatData, callback batching and worker memory discipline
+
+**Scope:** Exact inspection of MP4Box.js v2.5.0 `ISOFile` implementation. Source-level integration guidance; no parser execution or real HLS fragment test.
+
+### Verified API behaviour
+
+- `ISOFile` constructor defaults `discardMdatData = true`. With this default, mdat payload is discarded from parser buffers unless extraction is configured and started before the relevant media data is appended. MP4Box.js explicitly warns that extraction options set while `discardMdatData` is true only extract samples whose data is appended after `start()`.
+- The intended live sequence is therefore: fetch/append init segment; wait for `onReady`; identify the video track; call `setExtractionOptions(trackId, user, { nbSamples })`; call `start()`; only then append media fragments/parts. Appending the media parts before extraction is armed risks losing their sample payloads.
+- `setExtractionOptions()` defaults `nbSamples` to 1000. `onSamples` is invoked when that batch count is reached or when all currently available samples have been processed. Explicitly set a small bounded batch size (e.g. one part's expected sample count) and measure callback latency; do not assume the default means one callback per HLS part.
+- `appendBuffer()` requires an `ArrayBuffer` carrying a `fileStart` property and inserts it into MP4Box.js's virtual file stream. The worker must assign monotonically increasing virtual offsets for init + each appended fMP4 part/segment and preserve fragment ordering. These are parser offsets, not camera timestamps.
+- `appendBuffer()` parses newly available boxes, updates sample lists after `moov` is parsed, and processes extracted samples only after `start()` has enabled `sampleProcessingStarted`.
+- `onSamples` returns sample objects with their `data` arrays. The parser tracks allocated sample payload bytes and exposes `getAllocatedSampleDataSize()` and `releaseSample(trak, sampleNum)`; the worker must not leave extracted sample payloads retained indefinitely in MP4Box's internal track sample list.
+- For a bounded live pipeline, copy each emitted sample's bytes into the application's own bounded compressed ring (or transfer a dedicated copy to another worker), then release parser-owned sample data as soon as ownership is safely transferred. Track MP4Box parser memory separately from ring memory. Avoid retaining duplicate full-segment and part sample payloads.
+- `stop()` disables sample processing; `flush()` processes remaining samples and cleans parser buffers. Neither should be used as a per-part normal control; keep the parser running during continuous ingest and use a new parser/epoch only on a genuine discontinuity or codec/init change.
+
+### Required implementation details
+
+1. Set `fileStart` on each appended ArrayBuffer and maintain a single monotonic virtual byte cursor. Never reuse `fileStart=0` for each independent HLS URI within one ISOFile.
+2. Append init first, arm extraction in `onReady`, call `start()`, then append media parts in strict stream order.
+3. Set an explicit `nbSamples` appropriate to the fragment cadence; test both 1 and expected part sample count to find the best latency/overhead trade-off.
+4. On each callback, validate track ID, sample count, sample byte length, DTS/CTS monotonicity rules and fragment continuity. Copy/transfer the bytes into the bounded ring and release MP4Box's retained sample data.
+5. Measure `getAllocatedSampleDataSize()` and verify it returns to a small stable baseline after every callback. If it grows over time, fail the PoC as a memory leak/unbounded parser buffer.
+6. Treat a missing sample payload, incomplete mdat, parser error or unexpected sample offset as a gap. Do not advance the bookmark/replay index across an unverified gap.
+
+### Assessment
+
+MP4Box.js can support a streaming extractor, but its defaults are not safe to adopt blindly for a long-running replay worker. The parser must be armed before media fragments arrive, virtual file offsets must remain monotonic, callback batch size must be explicit, and parser-owned sample bytes must be released after copying into the bounded ring. These are implementable controls, but memory stability must be demonstrated in a multi-hour two-camera soak test. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MP4Box.js v2.5.0 `ISOFile` constructor and `discardMdatData` default: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+- MP4Box.js v2.5.0 `setExtractionOptions`, `appendBuffer`, `onSamples`, `start`, `flush` and sample-memory release: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+- MP4Box.js v2.5.0 browser API and progressive parsing docs: https://github.com/gpac/mp4box.js/tree/v2.5.0
