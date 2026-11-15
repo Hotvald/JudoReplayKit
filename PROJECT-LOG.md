@@ -3066,3 +3066,43 @@ The previous PoC design must be corrected to use the standardized RTP timestamp 
 - MDN `RTCEncodedVideoFrame.getMetadata()`: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/getMetadata
 - MDN deprecated/non-standard `RTCEncodedVideoFrame.timestamp`: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/timestamp
 - W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
+## 2026-11-15 — Compressed H.264 ring as authoritative history; decoded cache as best-effort hot window
+
+**Scope:** Synthesis of WebRTC Encoded Transform and WebCodecs queue/resource semantics. This is a buffer-policy candidate, not an architecture decision; no runtime PoC or local changes.
+
+### Design principle
+
+Treat the bounded compressed H.264 access-unit ring as the authoritative recent history, and treat continuous decoding as a best-effort hot cache. A decoder backlog or decoder-resource stall must not destroy the encoded history or block the live view/recording path.
+
+### Candidate worker policy
+
+1. In the dedicated replay receiver transform, construct an immutable `EncodedVideoChunk` from each received complete H.264 access unit. Where supported, pass the data ArrayBuffer in the `transfer` list so the user agent MAY reference the transferred bytes rather than copying them; do not assume zero-copy.
+2. Retain each chunk and its metadata in a bounded compressed ring, including source epoch, unwrapped RTP PTS, key/delta type, NAL/access-unit integrity, SPS/PPS identity/version and discontinuity markers. Evict only at a safe keyframe boundary so every retained delta chunk has its decode dependencies.
+3. Feed the same immutable EncodedVideoChunk object to the warm WebCodecs decoder. The object is not consumed or detached by `decode()`; the ring can retain the chunk for later pre-roll decode, subject to actual browser memory behaviour and runtime tests.
+4. Maintain a bounded decoded hot window. Close every output VideoFrame as soon as it is no longer required. Keep only the selected frame and a short nearby window when paused/reviewing.
+5. Track both `decodeQueueSize` and an application-level input/output lag metric. `decodeQueueSize` is the count of pending decode requests and decreases when the underlying codec is ready to accept work; it does not alone describe every frame still in the decoder's internal pipeline. Compare submitted chunk sequence/PTS with output sequence/PTS and elapsed media time.
+6. If the warm decoder falls behind, preserve all encoded chunks in the compressed ring. Stop submitting dependent delta chunks to the warm decoder once a gap has occurred; mark the decoded hot window discontinuous and resume warm decoding at the next verified IDR with all required SPS/PPS. Do not drop a delta chunk from the compressed history just because the warm decoder is saturated.
+7. For an older replay target outside the decoded hot window, create a seek operation from the nearest preceding IDR in the compressed ring, feed chunks in decode order, discard/close outputs before the requested PTS, then display the target and build a short following window. Measure first-display and target-frame latency.
+8. If the worker itself cannot copy/retain encoded access units quickly enough, mark the encoded ring as incomplete and expose the gap. The system must never claim a complete replay interval when access units were dropped.
+
+### Important queue and recovery details
+
+- WebRTC encoded-transform backpressure is disabled. The transform must not await an unbounded decode backlog and assume upstream media will pause safely.
+- `VideoDecoder.decodeQueueSize` should be used with `ondequeue`, but application-level output lag and dropped access-unit counters are also required.
+- If the warm decoder misses one dependent delta frame, later delta frames may reference it. Resume only from a valid random-access point; do not resume at an arbitrary next frame.
+- The compressed ring is still subject to the H.264 Annex B/IDR/SPS/PPS requirements, MediaMTX v1.21.3's B-frame restriction, multi-PPS concerns, source timestamp wrap and reconnect epochs.
+- The same EncodedVideoChunk may be retained and submitted to a decoder without mutating it because chunks are immutable; test repeated submission to a new/reused decoder on supported browser implementations.
+
+### PoC comparison
+
+Compare a full decoded cache, a compressed ring plus 0.5–1-second warm decoded window, and a compressed ring with no warm decode but preconfigured on-demand seek decoder. Force decoder saturation and delayed output to verify that encoded history remains complete, hot-cache gaps are labelled, and recovery starts at the next IDR. Measure memory, queue depth, input/output lag, decode throughput, first-display latency, exact frame-step, live-view latency and recording continuity for two cameras.
+
+### Assessment
+
+This policy separates data preservation from decode performance. It may provide a much smaller and more robust history than a full decoded cache while keeping common recent replay positions immediately available. Its success depends on measured GOP length and on-demand pre-roll speed; it is not yet proven to meet the immediate-replay requirement for every position. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC Encoded Transform backpressure and drop/order rules: https://www.w3.org/TR/webrtc-encoded-transform/
+- W3C WebCodecs EncodedVideoChunk immutability/transfer and decoder queue semantics: https://www.w3.org/TR/webcodecs/
+- MDN WebCodecs decoder queue management: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
