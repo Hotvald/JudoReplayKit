@@ -1558,3 +1558,15 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - Local SHA-256 for `mediamtx_v1.21.3_windows_amd64.zip`: `B2F5246B07CB72961DF03B8D5E8CAD43DC657BCF3F49A87BB031BDF22721AF74`.
 - The hash is now known, but it has not yet been verified against an authoritative publisher-controlled checksum or GitHub Artifact Attestation. A matching third-party package manifest is not sufficient proof on its own.
 - Archive remains unextracted and unused. Next required input: exact setup script source; then verify against the publisher's official mechanism before any extraction.
+
+
+### Addendum — review of PoC1 tool setup script
+
+**Source:** Complete script supplied by user, 2026-11-15; official MediaMTX and GitHub documentation reviewed.
+
+- The script stops because it assumes `checksums.sha256` can be downloaded as a release asset from `https://github.com/bluenviron/mediamtx/releases/download/v1.21.3/checksums.sha256`. The observed failure is consistent with that URL not yielding a usable file; the exact HTTP response has not yet been captured.
+- MediaMTX's official security documentation confirms that release binaries can be verified using GitHub Artifact Attestations, with the documented command pattern `gh attestation verify <artifact> --repo bluenviron/mediamtx`. The official documentation also describes a checksum file on the release page as a transfer-integrity check.
+- Local archive SHA-256: `b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74`; still not verified against publisher-controlled evidence.
+- Script review also shows FFmpeg is separately downloaded from FFmpeg-Builds and expects a second `checksums.sha256` URL. That archive must have its own publisher-controlled integrity/provenance verification and licensing/build review before extraction or execution.
+- Script has not been rerun or edited. Neither archive has been extracted or executed; no server/service/network configuration has been changed.
+- Next step: determine whether GitHub CLI (`gh`) is available. If available, verify the existing MediaMTX ZIP directly with the official attestation command, constrained to `bluenviron/mediamtx`. If unavailable, stop and agree a safe way to obtain/use the verifier. Separately validate the FFmpeg publisher's supported verification mechanism before downloading or extracting it.
