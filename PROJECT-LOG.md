@@ -1488,3 +1488,36 @@ DeepSeek proposes useful test instrumentation and scenarios, but suggested timin
 - Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No tests may modify either location.
 - Requirements Draft 0.4 and DECISIONS.md are not changed by this entry.
 
+
+## 2026-11-15 — Rev.9 PoC 1 preflight and tool-setup preparation
+
+**Source:** User-provided PowerShell output in the JudoReplayKit project conversation. **Environment:** `C:\\JudoReplayKit_Rev9_Dev` only. **Status:** Preflight completed; tool download/setup has not yet been confirmed.
+
+### Preflight observations
+
+The user ran the PoC 1 read-only preflight script and supplied its complete report, generated at `2026-11-15T16:02:32+01:00`:
+
+- Host: Windows 10 Pro, version/build `10.0.19045`; PowerShell 5.1; four logical processors.
+- Workspace root `C:\\JudoReplayKit_Rev9_Dev` contained only the `PoC1` directory at the time of inventory.
+- FFmpeg, FFprobe and MediaMTX were not found on PATH.
+- No relevant running processes or common media-port listeners were reported.
+- C: volume reported 231.9 GiB total and 113.26 GiB free.
+- The preflight script reported that it did not read media/configuration contents, access either protected D: installation, or change services, processes, firewall rules, ports or configuration. It wrote only its report under the development workspace.
+
+These observations establish the reported state at preflight time only. “Not found on PATH” does not prove that a binary is absent elsewhere on the machine; no exhaustive filesystem search was performed.
+
+### Tool setup hand-off
+
+- The owner approved proceeding with version/source/licensing checks and obtaining portable PoC tools under the isolated Rev.9 development workspace. This approval does not authorize changes to production or Rev.8.
+- A setup ZIP named `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1.zip` and script `01-Download-PoC1-Tools.ps1` were supplied to the user. The proposed package targets MediaMTX v1.21.3 and an FFmpeg 9.0.2 Windows build; exact binary/checksum/license verification remains pending and must be recorded from the actual script output.
+- The first execution attempt failed because PowerShell was in `C:\\Users\\otval` rather than the extracted package directory. The script was therefore not found and did not run. The user then located it at `C:\\Users\\otval\\Downloads\\JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1\\scripts\\01-Download-PoC1-Tools.ps1`.
+- The user has been given the fully qualified invocation command. No successful download, extraction, checksum verification or tool version check has yet been reported in the project conversation at the time of this entry.
+
+### Safety and next step
+
+- Continue only in `C:\\JudoReplayKit_Rev9_Dev\\PoC1`.
+- Do not touch `D:\\JudoReplayKit` or `D:\\JudoReplayKit_Rev8_Test`, their services, configurations or recordings.
+- Wait for the actual tool-setup script output. If checksum verification fails or is unavailable, stop and investigate; do not bypass it.
+- Before starting MediaMTX or opening ports, inspect and verify the installed binaries, versions, checksums and exact FFmpeg build configuration/licensing evidence. No server has been authorized or reported started yet.
+
+No application code, requirements, architecture or configuration was changed by this preflight/setup hand-off. Requirements Draft 0.4 and DECISIONS.md remain unchanged. The overall Rev.9 status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock and full implementation.
