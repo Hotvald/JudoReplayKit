@@ -3193,3 +3193,48 @@ This is a major improvement to bookmark design. `requestVideoFrameCallback()` ca
 - MediaMTX v1.21.3 NTP estimator: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/ntpestimator/estimator.go
 - MediaMTX v1.21.3 fMP4 timestamp/segment mapping: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_track.go
 - gortsplib v5.6.7 RTCP SR to RTP/NTP mapping (`Client.PacketNTP`): https://github.com/bluenviron/gortsplib/blob/v5.6.7/client.go
+## 2026-11-15 — Rev.9 two-camera bookmark semantics: shared event time versus per-camera media positions
+
+**Scope:** Cross-check of the owner-confirmed Rev.9 Requirements Draft 0.4 against the new displayed-frame timestamp analysis. Requirements interpretation and design note only; no owner approval is inferred and no implementation is authorized.
+
+### Binding requirements recalled from Rev.9 draft 0.4
+
+- One bookmark represents one shared event/reference moment.
+- Store the shared event/reference timestamp and the corresponding mapped media position for each camera.
+- When opening a bookmark, show both camera views where each camera's recording covers the event. The two views do not have to be perfectly identical in time; mapping offset/uncertainty must remain honest.
+- A bookmark can be created from Instant Replay and points to the media/event timestamp currently viewed, not button-click wall-clock time. Live-time bookmarking remains in scope if practical and must map to the media time represented by the live-delay view.
+
+### Mapping model
+
+1. For a bookmark created from a live camera view, use `requestVideoFrameCallback()` metadata for the frame actually presented by that camera. Its `rtpTimestamp` is a direct per-camera frame identity; `captureTime` is an optional server-NTP-derived time reference; `mediaTime` identifies the presentation timestamp on that video element's own timeline.
+2. For a bookmark created while reviewing Instant Replay, use the replay worker's selected frame identity/PTS, not the current live clock or the replay button's wall-clock time.
+3. Select one camera/frame as the bookmark's reference event moment. Store that shared event/reference timestamp separately from each camera's mapped media position. Map the reference into the other camera's timeline using the measured per-camera offset and uncertainty.
+4. Preserve each camera's raw RTP timestamp and source epoch so that the exact frame can be found in its live ring and mapped to its archive. Do not assume camera 1 and camera 2 RTP timestamps share the same origin or can be directly compared.
+5. `captureTime`/RTCP Sender Report mapping from MediaMTX is a server-estimated NTP timeline. For RTMP input, MediaMTX anchors each stream's NTP estimator independently to server time on the first frame and advances it from source PTS. This is suitable for aligning a frame to that camera's MediaMTX recording timeline, but the difference between cameras may include their independent source-to-server latency.
+6. Therefore, a common server-NTP event timestamp does not prove true simultaneous sensor capture. Cross-camera mapping must retain measured offset and uncertainty. If automatic offset estimation cannot be validated, an explicit calibration procedure/common visible event is a possible fallback to test, not an approved requirement change.
+
+### Consequences
+
+- The RTSP sidecar proposed above provides an independent mapping from each camera's RTP timestamp to MediaMTX NTP. It improves archive lookup and validation but does not remove camera-to-server latency differences or establish physical capture synchronization.
+- `requestVideoFrameCallback()` solves a different problem: it identifies the actual frame presented to the referee, including when Live Delay is active. This avoids substituting the latest received replay frame or the wall-clock button press.
+- The same raw RTP timestamp can be used to find the corresponding frame in the replay-only ring only after validating MediaMTX v1.21.3's same-path RTSP/WebRTC timestamp base with separate PeerConnections.
+- Store both the shared event reference and the two camera-specific positions. Do not collapse them into one timestamp or force both cameras to show identical frame times.
+
+### Required tests
+
+1. Create bookmarks from Camera 1 live view, Camera 2 live view, and Instant Replay. Verify the selected reference frame and both mapped camera positions.
+2. Repeat with Live Delay values 1–5 seconds. The bookmark must point to the frame actually shown, not the newest incoming frame.
+3. Compare camera-specific `captureTime`/RTCP NTP against a common visual/audible event visible in both cameras. Quantify residual offset and uncertainty under changing Wi-Fi/network conditions.
+4. Test callback freshness and vsync delay under UI load; record `presentedFrames`, `expectedDisplayTime` and the chosen frame RTP timestamp.
+5. Reopen bookmarks from the continuous fMP4 archive and verify that each camera lands on the mapped event position, while preserving independent frame stepping.
+
+### Assessment
+
+The displayed-frame RTP metadata can provide exact per-camera frame identity for bookmarks; MediaMTX's NTP mapping can align that frame to its own archive. Cross-camera alignment remains a separate estimation problem because RTMP input's server-estimated NTP anchor is independent per camera and includes source-to-server latency. This distinction matches Rev.9's requirement to store one shared event reference plus per-camera positions and report offset/uncertainty honestly. No architecture is selected and no implementation is authorized.
+
+### Evidence
+
+- Rev.9 Requirements Draft 0.4, sections 4, 7 and owner clarifications: https://github.com/Hotvald/JudoReplayKit/blob/main/REV9-REQUIREMENTS-DRAFT.md
+- MediaMTX v1.21.3 RTMP publisher sets `ReplaceNTP: true`: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/rtmp/conn.go
+- MediaMTX v1.21.3 NTP estimator anchors each stream independently: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/ntpestimator/estimator.go
+- WICG Video Frame Request Callback WebRTC metadata: https://wicg.github.io/video-rvfc/
