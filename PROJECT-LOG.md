@@ -3765,3 +3765,25 @@ The HLS/fMP4 → MP4Box.js → WebCodecs candidate still looks promising, but it
 - gohlslib v2.4.7 part finalization and independent flag: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_part.go
 - gohlslib v2.4.7 fMP4 segment storage: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segment_fmp4.go
 - MP4Box.js fragmented MP4 parsing/sample extraction: https://github.com/gpac/mp4box.js/tree/v2.5.0
+## 2026-11-15 — MediaMTX HLS requests share one muxer/stream reader per path
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 `internal/servers/hls/server.go` and `muxer_instance.go`. Source-level isolation finding; no runtime load test.
+
+### Verified behaviour
+
+- MediaMTX HLS server maintains a muxer map keyed by path. `getOrCreateMuxer()` returns the existing muxer for that path when one is already present; it does not create a new HLS muxer for each HTTP playlist/segment/part request.
+- Each `muxerInstance` creates one gohlslib muxer and one `stream.Reader`, configures the reader once with `hls.FromStream()`, registers it with the MediaMTX stream and runs it until cancellation or reader error.
+- Each HTTP request is handled by the same instance's `hmuxer.Handle()` method. Additional HLS clients/worker fetches therefore share the same per-path HLS muxer and MediaMTX stream reader.
+- The HLS muxer instance tracks `lastRequestTime`; the configured muxer-close-after timeout can destroy an inactive instance. A continuously active live player or replay-part fetcher keeps it active.
+
+### Consequences for the HLS/MP4Box/WebCodecs candidate
+
+- A dedicated replay worker fetching HLS playlists/parts does not create a separate MediaMTX `stream.Reader` per camera or per replay operation. It reads the already-produced HLS output from the path's shared muxer.
+- This is a better server-side isolation boundary than opening a fresh WebRTC replay reader for every review. Replay parsing/decoding is performed in the browser worker; the MediaMTX HLS muxer continues its normal output path.
+- The worker adds HTTP requests, memory copies and client-side parsing/decode CPU/GPU, so the end-to-end no-impact requirement still needs measurement. Shared muxer reuse is not proof of zero overhead.
+- If the HLS worker is the only client, its ongoing playlist/part requests also keep the muxer active. If it stops and the close-after timeout expires, the HLS muxer may be destroyed and must warm up again.
+
+### Evidence
+
+- MediaMTX v1.21.3 per-path HLS muxer map and reuse: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
+- MediaMTX v1.21.3 one HLS muxer instance/one stream.Reader and shared HTTP handler: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
