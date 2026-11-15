@@ -3002,3 +3002,35 @@ PRISM's official documentation confirms that mobile keyframe interval is configu
 
 - PRISM Live Studio mobile — Setting Adaptive Bitrate: https://guide.prismlive.com/mobile/guides/streaming/configuration/setting-adaptive-bitrate
 - PRISM Live Studio official FAQ — mobile encoding settings and 1–2-second keyframe interval: https://prismlive.com/en_us/faq/faq.html
+## 2026-11-15 — MediaMTX security advisory review: v1.21.3 is outside the affected ranges
+
+**Scope:** Review of official MediaMTX GitHub Security Advisories and the current release listing. This is a version-range assessment only; the local executable/configuration was not inspected and no services or files were changed.
+
+### Verified advisories and patch ranges
+
+- **GHSA-w334-5mp5-h897 (Critical, CVSS 9.6):** CSRF against the Control API could allow a browser form POST to create a path with `runOnInit`/related hooks and execute commands on the host. Affected versions are `>=1.0.0, <1.21.1`; patched versions are `>=1.21.1`. The issue depends on the Control API being enabled and a vulnerable browser/request context. MediaMTX v1.21.3 is outside the affected range.
+- **GHSA-5jgv-c722-r5cg (High):** Zero-length H.264 SPS/PPS in an RTMP AVC configuration could panic and terminate the MediaMTX process. Affected versions are `>=1.16.0, <1.21.0`; patched versions are `>=1.21.0`. MediaMTX v1.21.3 is outside the affected range.
+- **GHSA-7498-vjgw-9cr2 (High):** Zero-length HEVC VPS/SPS/PPS in an RTMP publisher configuration could panic and terminate MediaMTX. Affected versions are `>=0.23.0, <1.21.0`; patched versions are `>=1.21.0`. MediaMTX v1.21.3 is outside the affected range.
+- **GHSA-jh89-m3cv-fmv2 (High):** When deprecated legacy per-path `readUser`/`readPass` credentials were used with playback enabled, recordings could be listed/downloaded without authentication. Affected versions are `>=1.6.0, <1.21.2`; patched versions are `>=1.21.2`. MediaMTX v1.21.3 is outside the affected range.
+- The official GitHub release listing currently identifies v1.21.3 (25 October 2026) as the latest published release on the review date. This does not prove which binary is present in any local installation.
+
+### Consequences for JudoReplayKit
+
+1. The project's documented MediaMTX v1.21.3 candidate is patched for the four advisories above by version range. No urgent upgrade is indicated by these advisories alone if the running executable is truly v1.21.3 or later.
+2. At the next user-approved environment verification, record the actual executable version/hash and compare it with the project baseline; do not infer installed version from a config file or project note.
+3. Keep the Control API bound to loopback unless remote access is explicitly needed, and do not expose playback/API ports to untrusted networks. Even on a patched release, least-privilege access remains appropriate.
+4. Avoid deprecated legacy `readUser`/`readPass` path credentials in new configurations; prefer explicit `authInternalUsers` with narrow path/action permissions. This is a forward-looking configuration hygiene recommendation, not a claim that v1.21.3 remains vulnerable.
+5. Keep a security-advisory check in the weekly MediaMTX monitoring task. Treat any advisory with affected versions including the project's deployed version as a blocker requiring review before tournament use.
+
+### Assessment
+
+The official advisories confirm that the MediaMTX v1.21.3 candidate is outside the affected ranges for the four reviewed vulnerabilities, including a critical Control API CSRF-to-command-execution issue and a high-severity playback authorization issue. This is reassuring for the documented candidate but does not independently verify any local binary or its configuration. No local action was taken. Architecture status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- Official MediaMTX Security Advisories: https://github.com/bluenviron/mediamtx/security/advisories
+- GHSA-w334-5mp5-h897 (Control API CSRF/RCE): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-w334-5mp5-h897
+- GHSA-5jgv-c722-r5cg (H.264 empty SPS/PPS RTMP crash): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-5jgv-c722-r5cg
+- GHSA-7498-vjgw-9cr2 (HEVC empty parameter sets RTMP crash): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-7498-vjgw-9cr2
+- GHSA-jh89-m3cv-fmv2 (playback authorization bypass): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-jh89-m3cv-fmv2
+- MediaMTX official releases: https://github.com/bluenviron/mediamtx/releases
