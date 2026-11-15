@@ -3358,3 +3358,62 @@ MediaMTX's 1-second RTCP Sender Reports plus Chromium's WebRTC captureTime metad
 - MDN `RTCInboundRtpStreamStats.jitterBufferDelay`: https://developer.mozilla.org/en-US/docs/Web/API/RTCInboundRtpStreamStats/jitterBufferDelay
 - W3C WebRTC Stats definitions: https://www.w3.org/TR/webrtc-stats/
 - Browser compatibility: https://caniuse.com/mdn-api_rtcrtpreceiver_jitterbuffertarget
+## 2026-11-15 — HLS ProgramDateTime and hls.js fragment PTS as an alternative live-frame clock
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 HLS mapping and gohlslib v2.4.7 playlist generation, plus hls.js fragment/latency APIs. Alternative transport analysis only; no runtime PoC or local changes.
+
+### Verified MediaMTX/gohlslib behaviour
+
+- MediaMTX v1.21.3's HLS output path passes each video access unit to gohlslib with both `u.NTP` and `u.PTS` (`internal/protocols/hls/from_stream.go`).
+- gohlslib v2.4.7 stores each HLS segment's `startNTP` and `startDTS`. Its media playlist serializer writes `EXT-X-PROGRAM-DATE-TIME` using `seg.startNTP`.
+- For low-latency HLS playlists, gohlslib includes program-date-time on the most recent two segments, which should cover the current live segment and its predecessor. Non-low-latency playlists include the segment date-time values in the normal playlist.
+- In LL-HLS, the segment contains partial segments/parts. hls.js represents each part with `start = fragment.start + fragOffset`; the parent fragment retains `programDateTime`.
+- MediaMTX's HLS output therefore exposes a server-estimated NTP time on the playlist timeline. This is the same `u.NTP` source used by the fMP4 recorder for that path.
+
+### Verified hls.js mapping APIs
+
+- hls.js `Fragment.programDateTime` is an epoch-millisecond value parsed from `EXT-X-PROGRAM-DATE-TIME`.
+- hls.js `Fragment.startPTS` and `endPTS` are populated after transmuxing and represent the actual presentation-time range of the fragment; `startDTS`/`endDTS` are also available separately.
+- `Fragment.start` is the fragment's start on the hls.js media timeline. `Part.start` is the parent fragment start plus the part's offset.
+- A candidate mapping for a displayed HLS frame is `NTP_ms = frag.programDateTime + (frameMediaTime - frag.startPTS) * 1000`, provided the callback's `mediaTime` is on the same MSE presentation timeline and `startPTS` is the correct video-track start. This must be validated for discontinuities, transmux timestamp offsets, audio/video track alignment and B-frame composition offsets.
+- hls.js exposes live latency controls including `liveSyncDuration` in seconds and `liveSyncDurationCount` in target-segment units. Its documentation warns that a target below roughly three segment durations is likely to cause stalls. In low-latency mode, the controller can use manifest `PART-HOLD-BACK` when no explicit target is configured; explicit `liveSyncDuration` takes precedence.
+- hls.js may change playback rate to catch up when `maxLiveSyncPlaybackRate` is configured above 1, and it can seek back to `liveSyncPosition` when outside the permitted live latency window. This can cause repeated/dropped frames or jumps during recovery and must be measured for referee use.
+
+### Candidate HLS live + WebRTC replay topology
+
+1. Keep the visible live view on HLS/hls.js if that is the selected or existing live transport. Set its target live delay using hls.js latency controls, while keeping the replay path entirely separate.
+2. Use `requestVideoFrameCallback()` on the visible HLS `<video>` element to capture the exact displayed frame's `mediaTime`.
+3. Maintain a rolling map of current hls.js fragments/parts, including `programDateTime`, `startPTS`, `endPTS`, `start`, `duration`, discontinuity counter and track-specific PTS ranges.
+4. Convert the displayed frame's `mediaTime` to MediaMTX NTP using the containing fragment's programDateTime and actual video startPTS. Store the exact `mediaTime` and fragment identity as well as the derived NTP.
+5. The independent WebRTC replay worker can map its encoded RTP timestamps to the same NTP via Chromium `captureTime` or the RTSP/RTCP Sender Report sidecar. It can then locate the exact HLS-bookmarked event in the compressed replay ring.
+6. If hls.js metadata does not provide reliable frame-to-PDT mapping, retain the WebRTC live-view `requestVideoFrameCallback` path as the more direct RTP/captureTime alternative.
+
+### Live Delay implications
+
+- hls.js `liveSyncDuration` can request a target in seconds, including 5 seconds; unlike `RTCRtpReceiver.jitterBufferTarget`, it has no 4,000 ms API setter cap.
+- This does not mean a 1-second HLS target is reliable. With MediaMTX's default 1-second minimum segment duration, hls.js warns that a target below roughly three segment durations may stall. LL-HLS part holdback may permit a lower target, but it must be tested with the exact MediaMTX playlist and hls.js version.
+- MediaMTX v1.21.3 default HLS values documented for this release include 1-second segment duration and 200-ms part duration. The actual playlist's `PART-HOLD-BACK`, target duration and part durations must be inspected rather than inferred from config defaults.
+- HLS live latency recovery may change playback rate or jump to the live sync position. For a referee display, any such correction must be visible/telemetried and must not alter the bookmark's selected media timestamp.
+
+### Advantages and risks versus WebRTC live view
+
+**Potential advantages:** HLS ProgramDateTime is already part of MediaMTX output and is directly tied to the recorder's NTP timeline; hls.js exposes fragment programDateTime and actual PTS ranges; live delay can be requested in seconds without the WebRTC jitterBufferTarget 4-second cap; existing HLS live view may be reusable.
+
+**Risks:** HLS/hls.js target latency is not exact; 1–2-second targets may stall depending on part holdback and segment duration; fragment-to-video-frame PTS mapping must be validated; hls.js may alter playback rate or seek on stalls; the replay WebRTC path still has the H.264 no-B-frame and SPS/PPS requirements.
+
+### Required PoC comparison
+
+Compare (A) WebRTC live view + requestVideoFrameCallback RTP/captureTime + separate WebRTC replay worker, and (B) HLS live view + hls.js ProgramDateTime/PTS mapping + separate WebRTC replay worker. For each, measure actual displayed delay for 1–5-second settings, frame drops/repeats, timestamp-to-archive accuracy, bookmark frame identity, recovery jumps, CPU/GPU, memory and live/recording continuity. Cross-check HLS-derived NTP against fMP4 segment NTP and RTSP sidecar PacketNTP for the same source event.
+
+### Assessment
+
+HLS ProgramDateTime is a viable alternative source of absolute MediaMTX timeline for the visible frame, and hls.js exposes enough fragment PTS metadata to attempt exact mapping from `requestVideoFrameCallback.mediaTime`. It may offer a more flexible 5-second Live Delay than WebRTC's 4-second jitterBufferTarget cap. However, short HLS live targets and fragment/frame timestamp mapping are not yet proven. Keep this as a separate transport PoC; do not replace the WebRTC replay worker or declare HLS exact frame stepping without testing. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS output passes `u.NTP` and `u.PTS`: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- gohlslib v2.4.7 segment PDT generation and low-latency playlist: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 segment NTP/DTS mapping: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- hls.js Fragment `programDateTime`, `startPTS`, `startDTS` and Part offsets: https://github.com/video-dev/hls.js/blob/master/src/loader/fragment.ts
+- hls.js live latency controls: https://github.com/video-dev/hls.js/blob/master/docs/API.md
+- MediaMTX HLS configuration defaults: https://mediamtx.org/docs/references/configuration-file
