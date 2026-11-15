@@ -3034,3 +3034,35 @@ The official advisories confirm that the MediaMTX v1.21.3 candidate is outside t
 - GHSA-7498-vjgw-9cr2 (HEVC empty parameter sets RTMP crash): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-7498-vjgw-9cr2
 - GHSA-jh89-m3cv-fmv2 (playback authorization bypass): https://github.com/bluenviron/mediamtx/security/advisories/GHSA-jh89-m3cv-fmv2
 - MediaMTX official releases: https://github.com/bluenviron/mediamtx/releases
+## 2026-11-15 — Chromium WebRTC encoded-frame PTS metadata is experimental; use RTP timestamp fallback
+
+**Scope:** Exact inspection of current Chromium Blink runtime feature definitions and `RTCEncodedVideoFrame::getMetadata()` implementation, cross-checked against MDN and the current W3C WebRTC Encoded Transform Working Draft. Source-level browser finding; no runtime PoC or local changes.
+
+### Verified findings
+
+- The current W3C WebRTC Encoded Transform Working Draft defines `RTCEncodedVideoFrameMetadata.timestamp` as the raw frame's presentation timestamp in microseconds. However, the current Chromium Blink feature definition marks `RTCEncodedVideoFrameAdditionalMetadata` as `experimental`, not stable. Chromium's runtime feature documentation says experimental features are not enabled by default in stable browser builds.
+- Chromium's `RTCEncodedVideoFrame::getMetadata()` implementation only sets `metadata.timestamp` when `RuntimeEnabledFeatures::RTCEncodedVideoFrameAdditionalMetadataEnabled()` is true. Therefore this field must not be relied upon in the normal stable Chrome/Edge baseline.
+- `getMetadata().rtpTimestamp` is the established metadata field. MDN documents it as the RTP sampling instant, and Chromium's implementation sets it from the underlying RTP timestamp. The legacy `RTCEncodedVideoFrame.timestamp` property is marked deprecated/non-standard by MDN and must not be used in new code.
+- `getMetadata().receiveTime` is a local high-resolution timestamp for the last packet used to produce the encoded frame. It is useful for receive/arrival measurements but is not the source presentation timestamp.
+- For H.264 RTP, the clock rate is 90 kHz. A replay worker can construct a source-local monotonic microsecond timeline from unwrapped 32-bit RTP timestamps: retain the first tick as the local zero point, unwrap subsequent 32-bit values across wraparound, and convert tick deltas using 1,000,000/90,000. Use integer/rational arithmetic or a remainder accumulator to avoid cumulative floating-point rounding drift.
+- RTP timestamps are source-local. Two camera RTP clocks cannot be directly compared or treated as synchronized capture clocks. Cross-camera alignment still requires measured receive/capture timing and an explicit offset/uncertainty model.
+
+### Consequences for JudoReplayKit
+
+1. Use `RTCEncodedVideoFrame.getMetadata().rtpTimestamp` as the interoperable timestamp source for the initial WebRTC/WebCodecs PoC. Do not use the deprecated `RTCEncodedVideoFrame.timestamp` property or assume `metadata.timestamp` exists.
+2. Store both unwrapped RTP ticks and the derived WebCodecs microsecond PTS in each encoded-ring entry. Keep a source/connection epoch so RTP timestamp reset after reconnect cannot be mistaken for a continuous timeline.
+3. Measure `receiveTime` separately for packet arrival and replay latency. Do not substitute it for media PTS or use it to claim camera capture synchronization.
+4. Include RTP wraparound, source restart, timestamp discontinuity, duplicate timestamp and missing-frame tests. Verify exact ordering and adjacent frame-step across the wrap boundary.
+5. If a future browser exposes the standardized microsecond `metadata.timestamp` by default, feature-detect it and compare it against the RTP-derived PTS; do not make it a hard dependency until the browser support baseline is stable.
+
+### Assessment
+
+The previous PoC design must be corrected to use the standardized RTP timestamp metadata and derive WebCodecs microsecond PTS locally. The newer W3C microsecond metadata field exists in the draft but Chromium's current implementation gates it behind an experimental feature. This is a concrete cross-browser compatibility requirement, not a blocker: RTP timestamp unwrapping is sufficient for a source-local timeline, subject to correct wrap/discontinuity handling. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- Chromium runtime feature definitions: https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/platform/runtime_enabled_features.json5
+- Chromium `RTCEncodedVideoFrame::getMetadata()` implementation: https://chromium.googlesource.com/chromium/src/+/main/third_party/blink/renderer/modules/peerconnection/rtc_encoded_video_frame.cc
+- MDN `RTCEncodedVideoFrame.getMetadata()`: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/getMetadata
+- MDN deprecated/non-standard `RTCEncodedVideoFrame.timestamp`: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/timestamp
+- W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
