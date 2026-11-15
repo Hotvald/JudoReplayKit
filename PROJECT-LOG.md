@@ -4344,3 +4344,53 @@ The earlier RAM-vs-disk distinction remains important:
 - gohlslib v2.4.7 fileDisk.Finalize() writes final part size, nils part buffers and closes the file: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/file_disk.go
 - gohlslib v2.4.7 parent segment finalization calls storage.Finalize(): https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segment_fmp4.go
 - gohlslib v2.4.7 segment rotation and muxer-level synchronization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+
+## 2026-11-15 — Critical replay-latency finding: Rev.8 loads the entire recording span before seeking
+
+**Scope:** Cross-check of the archived Rev.8 app.js snapshot, Rev.8 MediaMTX test configuration, and MediaMTX v1.21.3 Playback GET implementation. This is a source-derived design/performance finding; no new playback benchmark has been run.
+
+### Exact Rev.8 application behaviour
+
+- In the archived Rev.8 app.js snapshot, loadSpan() sets the replay video source to playbackUrl(STREAMS[i], span.start, span.end - span.start). It therefore requests the entire archive span returned by the playback list, not just the 10–30 second replay window.
+- Only after the video element reaches canplay does loadSpan() set video.currentTime to the requested absolute replay position relative to the beginning of that span.
+- The Rev.8 test configuration sets recordSegmentDuration to 1h. A single listed span can therefore cover close to an hour. Instant Replay can request that entire span for each camera and then seek near its end.
+- The same test configuration sets recordDeleteAfter to 24h. That is a test value, not a confirmed final retention decision; if the product target remains 30 days, this test value does not meet it.
+
+### MediaMTX v1.21.3 Playback GET behaviour
+
+- Playback GET explicitly sends Accept-Ranges: none. The endpoint does not support byte-range seeking.
+- The server's seekAndMux() opens the first selected recording file and passes it to segmentFMP4MuxParts(). That function parses the fMP4 boxes and walks the sample entries in file order.
+- For each sample, the fMP4 playback muxer invokes the payload reader before deciding whether the sample is before the requested start. Samples before the requested start are used to find/retain the relevant GOP; their payloads are still read. Consequently, requesting a short clip near the end of a long recording file can still require work proportional to the amount of media before the requested time.
+- The GET response is a newly muxed fMP4 stream for the requested start/duration. It is not a byte-range slice of the original file.
+
+### Why this conflicts with immediate referee replay
+
+The current Rev.8 path has two avoidable costs:
+1. The browser is asked to load the whole listed span (potentially almost one hour) even though the UI only needs a short review window.
+2. Even if the browser request is narrowed to the review window, MediaMTX v1.21.3 still scans and reads earlier samples in the selected recording file to locate the correct GOP. A one-hour recording segment can therefore still impose a long seek-to-target delay.
+
+This is a concrete architectural explanation for why the current archive-based implementation may fail the “immediate access” requirement. It is not yet a measured explanation of the user's earlier black replay window; decoding, MP4 compatibility, URL routing and browser behaviour remain separate checks.
+
+### Required repair direction — do not apply to production
+
+1. Change the replay request to ask for only the required time window plus a deliberate decode preroll/keyframe allowance, rather than span.start through span.end. Keep the UI's absolute-time mapping explicit and test that the first displayed frame is the intended frame.
+2. Do not assume request clipping alone solves latency. Benchmark the server-side scan cost with the current one-hour recording segments.
+3. Evaluate shorter recording segments or a separately indexed rolling replay cache so a requested moment is located without scanning an hour of samples. Choose segment length only after measuring actual GOP duration, keyframe interval, file count, storage overhead and seek latency.
+4. Test the first replay frame latency at several positions within a segment (near its start, midpoint and end), with recording continuing. Record server CPU, bytes returned, bytes read if instrumented, and time to first decoded frame.
+5. Keep continuous recording independent. Any cache/index must be disposable/rebuildable and must not become the only copy of the match.
+6. Review the test retention setting separately. Do not silently change the production retention or delete policy.
+
+### Acceptance criteria
+
+- A 15-second instant replay request must not download a whole one-hour recording span.
+- Time-to-first-decoded-frame must remain within the agreed referee-use target even when the requested moment is near the end of a recording segment.
+- Replay opening, seeking, pausing, frame stepping and closing must not interrupt live playback or continuous recording.
+- Test at least one full hour of recording and both cameras before approving the selected segment/index strategy.
+
+### Evidence
+
+- Archived Rev.8 app.js snapshot: 02_CURRENT_APP_JS.txt, loadSpan() at line 504 calls playbackUrl() with the complete span start and duration; the video seek occurs only after waitForVideo()/canplay.
+- Archived Rev.8 test config: mediamtx-runtime.yml, recordSegmentDuration: 1h and recordDeleteAfter: 24h at line 35.
+- MediaMTX v1.21.3 Playback GET sets Accept-Ranges: none and calls seekAndMux(): https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/on_get.go
+- MediaMTX v1.21.3 fMP4 playback parser walks sample entries and invokes the payload reader: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/segment_fmp4.go
+- MediaMTX v1.21.3 fMP4 playback muxer reads sample payloads before dropping pre-start samples and retains the GOP: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/muxer_fmp4.go
