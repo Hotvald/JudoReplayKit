@@ -2074,3 +2074,48 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - MediaMTX v1.21.3 outbound WebRTC track source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
 - MediaMTX discussion on reader PLI isolation and periodic requests: https://github.com/bluenviron/mediamtx/discussions/3567
 - RFC 8834, PLI behaviour: https://www.rfc-editor.org/rfc/rfc8834.html
+
+
+## 2026-11-15 — MediaMTX WebRTC fan-out and independent reader behaviour: source-level review
+
+**Scope:** Read-only inspection of MediaMTX v1.21.3 WebRTC path management and reader/writer code. No local installation, service, stream or recording was touched.
+
+### Findings
+
+- MediaMTX's WebRTC server handles each reader as a separate WebRTC peer connection. A reader has its own outbound tracks and RTP/RTCP sender state; the server fans out the path's encoded media to readers rather than sharing a single browser decoder.
+- The publisher's inbound WebRTC track and each reader's outbound WebRTC track are distinct RTP legs. The inbound leg receives publisher RTCP Sender Reports and maintains an RTP-to-NTP mapping. Each outbound reader leg generates its own Sender Reports using the NTP time passed with the media.
+- In the inspected v1.21.3 WebRTC implementation, incoming reader RTCP is consumed to keep Pion interceptors functioning, but the inspected outbound track does not forward reader PLI/FIR feedback back to the publisher. This matches the previously logged source behaviour: the server itself periodically sends PLI to a WebRTC publisher every two seconds.
+- This separation is useful for JudoReplayKit's requirement that a replay reader must not control or stall the live reader. It does not by itself prove that replay processing in the browser is isolated from live rendering or that CPU/memory contention is harmless.
+- A browser-side independent WebCodecs decoder fed by a receiver transform would be downstream of the ordinary WebRTC receiver. The original encoded frame must still pass unchanged to the normal browser decoder; the replay branch must use its own bounded queues, decoder, frame ownership and rendering surface. MediaMTX's reader fan-out alone does not provide this independent replay branch.
+
+### Important caveats
+
+- Separate peer connections do not mean separate camera encoders. A single publishing camera/stream can still be the shared source for both live and replay readers.
+- Multiple readers can increase server packet forwarding, network egress and browser decode work. A separate replay decoder on the same PC competes for CPU/GPU/memory bandwidth with live presentation and recording even if its software queues are independent.
+- MediaMTX's periodic two-second PLI cadence is tied to the inbound WebRTC publisher path, not a guarantee that every reader receives an IDR within a fixed two-second bound. The actual source's response and the time until a decodable access unit must be measured.
+- RTMP camera ingest does not gain RTCP PLI merely because the browser reads the stream over WebRTC. The source protocol remains a gating decision for this recovery mechanism.
+- Source review did not establish whether every codec/profile/packetization mode can be passed through to all supported browsers, nor did it measure performance under two cameras and simultaneous live/replay decode.
+
+### Required PoC checks
+
+1. Run one WebRTC publisher with two simultaneous MediaMTX readers: one normal live view and one replay/test reader. Confirm timestamps, packet continuity, and that pausing/seeking the replay reader does not affect the live reader.
+2. Repeat with two cameras, each with a live and replay branch, and measure CPU, GPU, memory, network throughput, packet loss and live latency.
+3. Confirm the replay branch can be paused, stepped, reset and re-created without changing the live WebRTC peer connection or causing camera renegotiation.
+4. Confirm whether replay can use a single reader with a browser-side duplicate decoder or a second MediaMTX reader; compare network and decode overhead.
+5. Test publisher reconnect and reader reconnect separately; ensure one reader's failure does not tear down the publisher or other reader.
+6. Verify the behaviour using the actual camera source protocol; do not extrapolate WebRTC publisher PLI behaviour to RTMP.
+
+### Assessment
+
+- MediaMTX's per-reader peer-connection model is compatible with isolating reader control state, but it is not a performance or live-continuity guarantee.
+- The lowest-risk first experiment remains a single browser WebRTC receive path with a receiver-side encoded transform and a separate bounded WebCodecs replay decoder, because it avoids introducing a second media-server reader and additional network egress. This is only a PoC ordering suggestion, not an architecture decision.
+- A second MediaMTX reader remains a comparison experiment if it proves useful for isolating replay delivery.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 WebRTC server path: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/server.go
+- MediaMTX v1.21.3 WebRTC session: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/session.go
+- MediaMTX v1.21.3 peer connection: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/peer_connection.go
+- MediaMTX v1.21.3 inbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
+- MediaMTX v1.21.3 outbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
