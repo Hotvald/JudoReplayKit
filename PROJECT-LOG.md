@@ -3965,3 +3965,32 @@ Hardware decoding is worth testing and may materially reduce CPU pressure, espec
 - MDN MediaCapabilities.decodingInfo and powerEfficient/smooth: https://developer.mozilla.org/en-US/docs/Web/API/MediaCapabilities/decodingInfo
 - Chromium VA-API documentation: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
 - Microsoft Edge H.264 decoder paths and diagnostics: https://learn.microsoft.com/en-us/troubleshoot/microsoft-edge/development/video-playback-issues
+## 2026-11-15 — LL-HLS part storage is a shared segment backing store; default storage is RAM, optional HLSDirectory uses disk
+
+**Scope:** Exact source inspection of gohlslib v2.4.7 storage factory, file/part implementation and LL-HLS part finalization. No runtime test or local storage changes.
+
+### Verified storage model
+
+- gohlslib v2.4.7 chooses `storage.NewFactoryRAM()` when `Muxer.Directory` is empty and `storage.NewFactoryDisk(directory)` when it is non-empty.
+- MediaMTX v1.21.3 passes `hlsDirectory` into the gohlslib muxer. The documented/default configuration sets `hlsDirectory: ""`, so the default LL-HLS rolling segment/part store is RAM-backed.
+- Each LL-HLS part is created with `segment.storage.NewPart()`. The part writer writes to both the parent segment file and a per-part buffer while the segment is open. The completed segment is therefore a concatenation of its fMP4 part fragments; part URIs are views/readers of the same segment backing store, not an independent second recording.
+- With disk storage, each part writes to the segment file at its offset and keeps a RAM buffer for immediate part reads. When the parent segment is finalized, the file is closed and part buffers are released; part readers then read the relevant byte range from the segment file.
+- With RAM storage, the parent segment and its part data remain in memory until the segment is evicted/removed. `SegmentCount` bounds the number of segments, but actual memory use is proportional to real segment byte sizes/bitrate and variable GOP duration.
+- The `hlsDirectory` disk option is not the permanent recording archive. LL-HLS playlist persistence is not written by the gohlslib `Directory` path for Low-Latency variant; it is a temporary backing store for active segment/part resources. The archive remains a separate MediaMTX recording function.
+
+### Consequences
+
+- If `hlsDirectory` remains empty, include the HLS ring in the RAM budget: approximately `camera bitrate × actual retained duration / 8`, plus fMP4 overhead, parser buffers, compressed replay ring (if copied), decoded cache and browser overhead.
+- If a disk-backed HLS directory is considered to protect RAM, treat it as temporary working storage with bounded rolling retention, not as the tournament recording folder. It adds disk I/O and should be located on a deliberate fast local volume; measure latency and disk wear.
+- The app should not store every sample twice without a reason. If MP4Box extracts from LL-HLS parts, copying compressed samples into a second application ring duplicates data that is already retained in the HLS ring. The PoC should compare: (A) retain HLS segments and parse on demand, (B) copy extracted AUs into an independent bounded ring then let HLS evict, and (C) hybrid recent sample index plus source HLS backfill.
+- If HLS is the source of truth for compressed history, the worker must ensure the relevant segment URI remains retained while decoding/replay is active. A slow replay must not assume the source segment will still exist after the rolling HLS window advances; copy the required compressed samples into a separate replay-owned buffer or pin/hold the required segment data.
+
+### Evidence
+
+- gohlslib v2.4.7 RAM/disk storage factory selection: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+- gohlslib v2.4.7 part storage created from parent segment: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 part writer and segment backing storage: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_part.go
+- gohlslib v2.4.7 disk file and part offset implementation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/file_disk.go
+- gohlslib v2.4.7 disk part writer/reader: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_disk.go
+- MediaMTX v1.21.3 HLS directory configuration passed into muxer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
+- MediaMTX default hlsDirectory: https://github.com/bluenviron/mediamtx/blob/v1.21.3/mediamtx.yml
