@@ -2451,3 +2451,46 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 
 - MediaMTX v1.21.3 reader queue implementation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
 - MediaMTX v1.21.3 reader registration and per-reader queue assignment: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+
+## 2026-11-15 — MediaMTX v1.21.3 late WebRTC reader join has no GOP pre-roll or reader-triggered keyframe request
+
+**Scope:** Exact v1.21.3 source inspection of `internal/servers/webrtc/session.go`, `internal/protocols/webrtc/from_stream.go`, `internal/protocols/webrtc/inbound_track.go`, `internal/protocols/webrtc/outbound_track.go`, `internal/stream/stream.go` and `internal/stream/reader.go`. Source-level finding only; no runtime test. No local files, services, camera streams or configurations were touched.
+
+### Verified source behaviour
+
+- A WebRTC read session creates a new `stream.Reader`, configures the outgoing WebRTC tracks and callbacks, completes WebRTC connection setup, and then registers the reader with `Stream.AddReader()`.
+- `Stream.AddReader()` starts that reader's pending-work queue and registers its callbacks with the stream. The inspected path does not preload a prior GOP, replay a recent keyframe, or provide timestamped media history to the newly registered reader. The reader receives subsequent stream callbacks.
+- The H.264 WebRTC output callback packetizes each access unit and writes its RTP packets to the outgoing track. The inspected output path contains no reader-start PLI/keyframe request or GOP cache.
+- The two-second periodic PLI in `inbound_track.go` is sent by MediaMTX on an **incoming WebRTC publisher track**. It is not an outgoing-reader request to an RTSP/RTMP/SRT camera source and must not be mistaken for a replay reader's immediate keyframe request.
+- MediaMTX's stream remuxing/format path can supply parameter sets at random-access points, but a reader joining after the latest such point does not receive that previous point from a historical cache. Until a suitable future random-access point and required parameter sets arrive, the browser may receive dependent frames that cannot independently start decoding.
+- Therefore the first decodable frame after a new replay WebRTC reader joins is dependent on the source's next usable random-access point (commonly an IDR, or a supported recovery point in the relevant path), plus parameter-set availability and decoder startup. The source inspection does not establish a fixed maximum wait.
+
+### Consequences for JudoReplayKit
+
+- A separate MediaMTX WebRTC reader remains a plausible isolation boundary for the live view, but **does not by itself provide instant replay**. It must be paired with an already-warm application-owned encoded ring/frame cache, or the application must tolerate waiting for a future random-access point.
+- A new replay connection per referee request is therefore a poor fit for the immediate-confirmation requirement unless a PoC demonstrates sufficiently short and predictable first-frame latency for the actual camera GOPs.
+- Prefer testing a replay reader that is connected continuously and keeps its own bounded encoded history, rather than opening a cold connection only when the referee presses Replay. This is a PoC candidate, not an architecture decision; resource use and live isolation still require measurement.
+- Measure button-to-first-decoded-frame latency at random points across the GOP, not just WebRTC connection time. Record source GOP/IDR interval, SPS/PPS delivery, first RTP packet, first decodable access unit, first VideoDecoder output and displayed frame.
+
+### Required PoC checks
+
+1. Join a fresh WebRTC reader at multiple controlled offsets after an IDR and measure time to first decoded frame.
+2. Repeat with short and long GOPs, camera reconnects, MediaMTX restart, and both IDR and recovery-point-SEI random-access streams where supported.
+3. Compare a cold-on-demand reader with an always-connected replay reader maintaining its own bounded encoded ring.
+4. Confirm whether the actual camera protocol/source reacts to any keyframe request; do not infer RTCP PLI support for RTMP, RTSP or SRT sources.
+5. Keep live-view latency, recording continuity, replay-reader queue discards, browser decode errors and first displayed replay frame as separate measurements.
+
+### Assessment
+
+- This is a newly verified limitation of the cold-join replay-reader approach in MediaMTX v1.21.3: independent reader queues provide isolation, but no historical GOP pre-roll or outgoing reader-triggered keyframe request is present in the inspected path.
+- The separate-reader experiment remains useful only if paired with a continuously warm buffer or if measured GOP wait is acceptable. The continuously warm reader is the stronger next experiment for the immediate-replay requirement.
+- No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 WebRTC read-session setup and reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/session.go
+- MediaMTX v1.21.3 WebRTC H.264 output path: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
+- MediaMTX v1.21.3 inbound WebRTC PLI ticker: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
+- MediaMTX v1.21.3 outgoing WebRTC RTP track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
+- MediaMTX v1.21.3 stream reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+- MediaMTX v1.21.3 per-reader queue: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
