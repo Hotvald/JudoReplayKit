@@ -2612,3 +2612,53 @@ Hardware decoding is a credible way to reduce CPU pressure, particularly on Wind
 - Microsoft Edge H.264 playback and hardware decoder diagnostics: https://learn.microsoft.com/en-us/troubleshoot/microsoft-edge/development/video-playback-issues
 - Chromium VA-API/Linux notes: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
 - Chromium D3D11 H.264 decoder implementation: https://chromium.googlesource.com/chromium/src/media/+/2f961f1c2198b47b00144e1b544f3cd33d9ab089/gpu/windows/d3d11_video_decoder.cc
+## 2026-11-15 — Decoded-frame cache alternatives: retained VideoFrames versus copied pixel buffers
+
+**Scope:** Review of current W3C WebCodecs memory, VideoFrame copy and transfer semantics, and Chromium Linux hardware-decoding diagnostics. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified findings
+
+- The current W3C WebCodecs specification explicitly defines codec system resources to include CPU memory, GPU memory and exclusive handles to decoding/encoding hardware. Such resources may be quickly exhausted and should be released when no longer needed.
+- A VideoFrame holds a reference to a media resource. `clone()` creates another VideoFrame object referencing the same media resource; it is not a deep pixel copy. `close()` releases that object's resource reference. Transferring a VideoFrame moves the reference to the receiving realm and closes the source object; it does not promise a pixel copy or release the resource while the destination still retains it.
+- `VideoFrame.copyTo(destination)` asynchronously copies pixel planes into an application-provided ArrayBuffer/TypedArray/DataView. This can make the retained cache independent of the decoder's original VideoFrame resource, after which the VideoFrame can be closed. However, the copy consumes memory bandwidth and a separate destination allocation; it does not eliminate the pixel-data storage cost. Destination format/layout and actual allocation size must be measured on each implementation.
+- The WebCodecs specification warns that decoded media can occupy large amounts of memory and encourages prompt `close()` calls. It also explicitly warns that GPU memory and exclusive codec hardware handles are among the system resources that can be exhausted.
+- `VideoDecoder.isConfigSupported()` returns a `supported` boolean and the recognized configuration. The WebCodecs `VideoDecoderSupport` dictionary does not report the selected hardware/software backend. Decoder backend must be verified separately with browser/platform diagnostics and measured telemetry.
+- The WebCodecs hardware acceleration options remain hints. The W3C specification notes higher startup latency can occur with hardware decode, throughput may be more consistent and CPU load generally lower; support may be restricted by codec profile/device, and hardware decoders may be less robust to malformed or non-conforming input.
+- Chromium's Linux VA-API document says Linux VA-API is not supported by default in the documented configuration and may work on certain configurations without guarantees. It documents `chrome://media-internals` and the `video_decoder` property (`GpuVideoDecoder`) as a way to verify the accelerated decoder backend for a playing video. This diagnostic is useful for Chromium media playback, but a separate WebCodecs VideoDecoder instance must still be correlated to the correct media-internals entry or otherwise instrumented; do not assume a normal `<video>` entry proves the WebCodecs decoder backend.
+
+### Buffer alternatives to compare in the JudoReplayKit PoC
+
+**A. Retain decoded VideoFrames directly**
+- Lowest explicit application-side copy cost and potentially best GPU-resident display path.
+- Can retain decoder/GPU surfaces and other scarce system resources for the whole retention window. A long ring can starve decoder output or increase GPU memory pressure; actual pool limits are implementation-specific and must be measured.
+- Requires strict ownership, bounded count/time, and exactly one `close()` per owned frame on eviction.
+
+**B. Copy decoded frames into a bounded CPU pixel ring**
+- Use `VideoFrame.copyTo()` into application-owned buffers, then close the original VideoFrame promptly. This may release decoder/GPU surface references earlier and make cache lifetime independent of the hardware decoder.
+- Pixel storage remains large and copies add memory bandwidth/latency. At full resolution the cache may still consume approximately the raw-frame payload budget calculated earlier, depending on chosen pixel format/stride; actual `allocationSize()` and destination bytes must be recorded rather than assuming tightly packed NV12.
+- Rendering may require upload/conversion back to a GPU surface, adding cost when displaying a selected historical frame. Test first-frame display and step responsiveness, not just copy throughput.
+
+**C. Compressed history plus short decoded hot window**
+- Keep the longer H.264 access-unit ring compressed and decode continuously into only a short decoded window. This minimizes decoded storage and limits retained VideoFrame resources.
+- A requested position outside the hot window must be decoded from the preceding valid keyframe. This can add variable delay and does not guarantee immediate first-frame display for the entire history.
+- This is a useful fallback only if measured keyframe pre-roll is acceptably fast for the referee workflow; it must not be described as instant arbitrary replay without results.
+
+### Required measurements and test design
+
+1. Run the same real camera bitstream through A, B and C on each target OS/browser/GPU. Test 720p and target 1080p, actual frame rate, two cameras, and two simultaneous replay operations.
+2. For A, measure active VideoFrame count, GPU dedicated/shared memory, system memory, decoder output cadence, stalls and errors as retention grows. Stress retention beyond the expected steady-state and confirm prompt recovery after eviction.
+3. For B, record `VideoFrame.allocationSize()` for the selected copy format, actual destination bytes, copy completion latency, memory bandwidth/CPU, GPU memory before/after `close()`, and selected-frame render/upload latency. Compare source frame formats and alignment.
+4. For C, measure replay-button-to-first-displayed-frame at random positions both inside and outside the hot window, including worst-case distance from preceding IDR, long GOP, camera reconnect and decoder recovery.
+5. For every design, verify exact adjacent frame stepping in both directions, presentation timestamps, no duplicate/missing frames, and continued live/recording operation. Bound encoded ring, decoded cache, copy queues and decoder queue independently.
+6. Do not infer actual hardware decoding from `isConfigSupported()` or a requested `prefer-hardware` hint. Record backend evidence from platform diagnostics where available and cross-check CPU/GPU telemetry during the WebCodecs PoC.
+
+### Assessment
+
+Three different resource models now need direct comparison: retaining decoder-backed frames, copying frames into a CPU-owned pixel ring, and keeping only a short decoded hot window with compressed history. Copying may release GPU/decoder references sooner but does not reduce the fundamental raw-pixel storage requirement; the hybrid reduces memory but can reintroduce seek latency. No option is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs memory model, resource definition and reference counting: https://www.w3.org/TR/webcodecs/
+- W3C WebCodecs VideoFrame copy and layout methods: https://www.w3.org/TR/webcodecs/#videoframe-interface
+- MDN VideoFrame.copyTo(): https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/copyTo
+- Chromium VA-API/Linux diagnostics: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
