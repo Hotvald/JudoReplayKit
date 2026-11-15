@@ -1570,3 +1570,13 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - Script review also shows FFmpeg is separately downloaded from FFmpeg-Builds and expects a second `checksums.sha256` URL. That archive must have its own publisher-controlled integrity/provenance verification and licensing/build review before extraction or execution.
 - Script has not been rerun or edited. Neither archive has been extracted or executed; no server/service/network configuration has been changed.
 - Next step: determine whether GitHub CLI (`gh`) is available. If available, verify the existing MediaMTX ZIP directly with the official attestation command, constrained to `bluenviron/mediamtx`. If unavailable, stop and agree a safe way to obtain/use the verifier. Separately validate the FFmpeg publisher's supported verification mechanism before downloading or extracting it.
+
+
+### Addendum — GitHub CLI not present
+
+**Source:** User-provided PowerShell output, 2026-11-15.
+
+- `Get-Command gh -ErrorAction SilentlyContinue` returned no result; GitHub CLI is not discoverable in the current PowerShell command path (not proof that no copy exists elsewhere).
+- MediaMTX's official security documentation explicitly recommends GitHub Artifact Attestation verification with `gh attestation verify --repo bluenviron/mediamtx` for release binaries.
+- Official GitHub CLI Windows installation documentation lists WinGet command `winget install --id GitHub.cli --source winget`; installation modifies PATH and requires a new terminal session. No installation was attempted or authorized.
+- Next step requires owner's approval before installing GitHub CLI. Existing MediaMTX archive remains unextracted and unexecuted. FFmpeg archive has not been downloaded.
