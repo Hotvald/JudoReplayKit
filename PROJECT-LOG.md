@@ -1954,3 +1954,45 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - W3C WebCodecs memory model: https://www.w3.org/TR/webcodecs/#raw-media-interfaces
 - MDN VideoFrame format: https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/format
 - MDN WebCodecs API and memory guidance: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+
+
+## 2026-11-15 — WebRTC camera timestamp semantics and cross-camera synchronization
+
+**Scope:** Follow-up review of the W3C WebRTC Encoded Transform specification, WebRTC RTP synchronization requirements, Absolute Capture Time extension documentation, and MediaMTX absolute-timestamp documentation. Read-only research; no local files, services, streams or recordings were changed.
+
+### What the browser can actually expose
+
+- The W3C Encoded Transform metadata distinguishes several different clocks/values: rtpTimestamp, receiveTime, captureTime, and senderCaptureTimeOffset. They must not be treated as interchangeable.
+- rtpTimestamp is the RTP sampling-time identifier for that stream. It is suitable for ordering/timing frames within a stream after handling wraparound and clock rate; it is not automatically a shared timebase between two independent camera streams.
+- receiveTime for a receiver frame is the local high-resolution time when the last RTP packet needed for that frame was received. It is useful for measuring arrival behaviour, but network jitter and different path delays make it unsuitable as a substitute for camera capture synchronization.
+- captureTime is the capture-system time translated into the browser's performance timebase. The W3C specification says it is undefined when the required Absolute Capture Time information is absent and no prior value is available for interpolation. It is therefore conditional, not guaranteed for arbitrary camera sources.
+- senderCaptureTimeOffset is needed to relate the sender's NTP clock to the capture system's NTP clock when those clocks differ. Browser metadata availability and actual values must be logged in the PoC rather than assumed.
+
+### What is needed to align two cameras
+
+- RFC 8834 explains RTP synchronization across multiple media sources using a common synchronization context (RTCP CNAME) and RTCP Sender Reports that correlate each stream's RTP clock to a common NTP/system clock. This is a standards-defined synchronization mechanism, but it depends on the source(s) supplying valid correlation information and the streams belonging to a correctly configured synchronization context.
+- The Absolute Capture Time RTP header extension carries an NTP capture timestamp and can carry an estimated offset between capture and sender clocks. Its purpose includes synchronization through intermediate systems that terminate RTCP. It is described in WebRTC's extension documentation as an experimental extension; source support and actual propagation must be verified.
+- Two independent cameras must not be assumed to share a synchronized capture clock merely because both send RTP, both have RTCP, or their packets arrive at the same PC. If their clocks are not synchronized or their source does not expose capture-time correlation, the system can only establish an arrival-time/ingest-time alignment with a measured uncertainty—not true capture-time alignment.
+- MediaMTX's current absolute-timestamp documentation says it can receive and send absolute timestamps over WebRTC and RTSP using RTCP Sender Reports, and that useAbsoluteTimestamp controls whether incoming absolute timestamps are preserved instead of replaced with the server's system timestamp. This is a potentially useful route, but the exact behaviour must be verified against the pinned MediaMTX v1.21.3 source/configuration and the actual chosen camera protocol before relying on it. It is not evidence that a mobile RTMP source provides capture-time timestamps.
+
+### Required PoC checks
+
+1. For each camera, log the encoded-frame rtpTimestamp, receiveTime, captureTime (including whether it is absent), senderCaptureTimeOffset, SSRC, codec/profile, and frame/keyframe type.
+2. Capture and inspect RTCP Sender Reports and any Absolute Capture Time RTP header extension at the camera-to-server and server-to-browser boundaries. Record whether MediaMTX preserves or regenerates the timing relationship.
+3. Verify whether the two camera sources use a common NTP clock or provide a valid per-source clock offset. If not, report alignment as ingest-time alignment and quantify observed offset/jitter; do not label it capture-time synchronization.
+4. Repeat with the actual candidate source protocol. RTMP, RTSP and WebRTC must not be treated as equivalent for absolute timestamp availability.
+5. Test drift over a sustained two-camera run, not just initial offset. Record estimated offset, uncertainty and drift over time, and define how a camera reconnect or timestamp discontinuity resets the mapping.
+
+### Assessment
+
+- The browser encoded-frame path has enough standardized metadata to measure more than just packet arrival, but accurate camera capture-time alignment is conditional on timestamp extensions/RTCP clock mapping supplied by the source and preserved through the media server.
+- This finding adds a concrete timestamp/clock validation task to the existing WebRTC + WebCodecs PoC. It does not prove the proposed path works with the user's cameras, and it does not approve MediaMTX timestamp settings or any camera protocol.
+- No architecture or technology choice is approved. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC Encoded Transform metadata: https://www.w3.org/TR/webrtc-encoded-transform/
+- W3C WebRTC Extensions timestamp behaviour: https://w3c.github.io/webrtc-extensions/#rtcrtpreceiver-timestamps
+- WebRTC Absolute Capture Time extension: https://webrtc.github.io/webrtc-org/experiments/rtp-hdrext/abs-capture-time/
+- RFC 8834, RTP synchronization context: https://www.rfc-editor.org/rfc/rfc8834.html
+- MediaMTX absolute timestamp routing: https://mediamtx.org/docs/features/absolute-timestamps
