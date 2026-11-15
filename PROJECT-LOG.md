@@ -1862,3 +1862,53 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 **Status:** Existing candidate ZIP not approved; architecture remains open. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
 
 **Evidence:** https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
+
+
+## 2026-11-15 — MediaMTX live-edge playback and WebCodecs feasibility review
+
+**Scope:** Read-only review of MediaMTX v1.21.3 source, current official MediaMTX documentation, W3C WebCodecs AVC registration, and MDN browser API documentation. No local files, services, streams or recordings were changed.
+
+### MediaMTX recording/playback findings
+
+- MediaMTX's documented default fMP4 `recordPartDuration` is 1 second. The documentation explicitly describes each fMP4 segment as a concatenation of small MP4 parts and says the last part can be lost on system failure; for MPEG-TS, data is flushed at the configured period. The one-second value is a default, not an approved JudoReplayKit latency target.
+- In the v1.21.3 recorder source, the current fMP4 part is accumulated in memory. It is written to the segment file when the part is closed, which occurs when a later sample arrives after the configured part duration has been reached, or when the segment closes. Thus the newest encoded samples are not necessarily present in the file at the instant Replay is requested.
+- The fMP4 segment file is created when the first part is closed. The segment's final header duration is written on segment close. The record-store playback code can calculate duration by scanning complete fMP4 parts when the header duration is zero; this means an active segment can potentially be discovered and its already-flushed parts read. It does not make the still-open part available.
+- The playback `/get` handler selects segments and muxes the requested interval into an HTTP response at request time. It does not hold a live subscription to the recorder or extend the response with future samples. This agrees with the MediaMTX maintainer's public explanation in issue #5052: the generated MP4 is a snapshot of the available recording when requested; Chrome may appear to continue because it requests again, but the playback service does not provide a continuously growing stream.
+- The source review does not establish safe concurrent read/write behaviour under every timing condition. In particular, a read racing with a part being appended must be tested; do not assume that a partially written final box is always harmless.
+- Consequence: MediaMTX's archive/playback interface remains a candidate for already-flushed historical material and later retrieval, but it is not by itself a proven immediate live-edge replay buffer. The maximum practical lag cannot be stated from the one-second default alone; it depends on configured part duration, sample arrival, file-write timing and the replay request race.
+
+### WebCodecs / browser feasibility findings
+
+- The W3C AVC registration defines H.264 input to `VideoDecoder` as individual encoded access units (one primary coded picture). It distinguishes AVC format, where codec configuration is supplied as an AVCDecoderConfigurationRecord, from Annex B, where SPS/PPS parameter sets are carried in the stream. This makes per-picture decoding technically plausible, but it does not itself provide transport, demuxing, RTP depacketization, timestamps, or a replay cache.
+- MDN documents `VideoDecoder` as available in current desktop Chrome, Edge and Firefox versions, but codec/profile support remains platform-dependent and must be checked using `VideoDecoder.isConfigSupported()` and real camera samples. The API is restricted to secure contexts; localhost is generally treated specially by browsers, while a plain HTTP LAN-IP origin must not be assumed to qualify.
+- WebRTC Encoded Transforms (`RTCRtpScriptTransform`) provide a browser-worker path to inspect encoded frames in the WebRTC sender/receiver pipeline and are documented by MDN as broadly available in current browsers. This could avoid decoding the live picture and then trying to recover encoded frames from a rendered `<video>` element. However, compatibility between the actual WebRTC H.264 encoded-frame representation, WebCodecs input requirements, keyframe recovery, and the MediaMTX/browser negotiated codec profile still needs a working PoC.
+- MediaMTX supports browser reading through WebRTC and HLS; its documentation states that HLS has higher latency than WebRTC. This is relevant to the live presentation path, but it does not prove that the existing WebRTC browser path exposes encoded frames to a replay cache or meets the live-delay requirements.
+
+### PoC implications — not architecture decisions
+
+1. Test MediaMTX active fMP4 recording at several controlled part durations using disposable recordings. At repeatable points, request a replay interval while the segment is still open. Record the newest media timestamp actually returned, missing-tail duration, errors, and whether a request racing a part write fails or returns truncated data.
+2. Test the same camera H.264 samples through a browser WebRTC receiver with an encoded transform, then feed complete access units to WebCodecs. Verify keyframe recovery, SPS/PPS/configuration, monotonic media timestamps, decoded-frame count and correct visual order. Do this separately in current Chrome, Edge and Firefox on the intended Windows/Linux targets.
+3. Maintain an explicit bounded decoded-frame ring buffer per camera, with frame timestamps and ownership/lifetime rules for `VideoFrame` objects. Demonstrate that one forward/back action presents exactly the adjacent decoded frame, and that backward stepping never depends on seeking the live stream. This is a proposed test model, not an approved implementation.
+4. Verify that the replay decode/cache workload cannot block or restart camera ingest, continuous recording, or the live display. Measure under two simultaneous camera streams and CPU/storage stress.
+5. Test origin security separately: localhost, LAN-IP HTTP and a trusted HTTPS origin. Do not assume WebCodecs works on every deployment origin.
+
+### Current assessment
+
+- MediaMTX is a plausible continuous recorder/archive candidate, but its `/get` endpoint is a finite snapshot rather than a live-follow replay mechanism.
+- WebRTC Encoded Transforms plus WebCodecs is a plausible browser-side route to an independent encoded/decode buffer. It is not yet proven for the required camera stream formats, browser matrix, timing, frame stepping or isolation.
+- No protocol, container, media server, browser pipeline, decoder or architecture is selected or approved by this entry.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**. The existing FFmpeg candidate ZIP remains unapproved, unextracted and unexecuted.
+
+### Evidence
+
+- MediaMTX record documentation: https://mediamtx.org/docs/features/record
+- MediaMTX playback documentation: https://mediamtx.org/docs/features/playback
+- MediaMTX v1.21.3 recorder source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_segment.go
+- MediaMTX v1.21.3 fMP4 part source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_part.go
+- MediaMTX v1.21.3 playback source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/on_get.go
+- MediaMTX v1.21.3 record-store source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recordstore/segment_fmp4.go
+- MediaMTX maintainer explanation: https://github.com/bluenviron/mediamtx/issues/5052#issuecomment-3916444995
+- W3C AVC WebCodecs registration: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- MDN VideoDecoder: https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder
+- MDN RTCRtpScriptTransform: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpScriptTransform
+- MediaMTX WebRTC browser reading: https://mediamtx.org/docs/read/webrtc
