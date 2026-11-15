@@ -1601,3 +1601,19 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - GitHub CLI is now available for the planned MediaMTX attestation verification.
 - Next command to run against the existing, unextracted archive: `gh attestation verify "C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip" --repo bluenviron/mediamtx`.
 - Do not extract or execute the archive unless the attestation verification succeeds and the verified signer/workflow/source are reviewed.
+
+
+### Addendum — MediaMTX attestation verification requires GitHub CLI authentication
+
+**Source:** User-provided PowerShell output, 2026-11-15. **Environment:** Local verification attempt; no project binaries were modified.
+
+- GitHub CLI 2.104.0 is installed and available in a fresh PowerShell session.
+- The user ran `gh attestation verify "C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip" --repo bluenviron/mediamtx`.
+- GitHub CLI returned: `To get started with GitHub CLI, please run: gh auth login` and advised that a `GH_TOKEN` environment variable could alternatively be supplied.
+- Therefore, the attestation verification did **not** run to completion. This is an authentication prerequisite, not a failed attestation and not evidence that the archive is invalid.
+- The owner has been advised that, if they choose to proceed, they can authenticate interactively with `gh auth login --hostname github.com --web`, then inspect `gh auth status` before retrying the verification. They must not share credentials, tokens or one-time codes in the project repository or chat.
+- No GitHub CLI authentication has yet been reported as completed. No attestation result is available.
+- MediaMTX archive remains unextracted and unexecuted. Its local SHA-256 remains `b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74`, but publisher provenance is still unverified. FFmpeg has not been downloaded or verified.
+- No MediaMTX server, stream, service, firewall rule, port or recording was started or changed. Protected production and Rev.8 locations remain untouched.
+
+**Next step:** Owner may choose whether to authenticate GitHub CLI interactively. If authenticated, run `gh auth status`, then retry the attestation command and inspect the reported repository, signer and workflow. Do not extract or execute the archive unless verification succeeds and provenance is reviewed.
