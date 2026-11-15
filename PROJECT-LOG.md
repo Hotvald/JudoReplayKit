@@ -3532,3 +3532,81 @@ An independent HLS/MSE replay player is a credible lower-complexity fallback bec
 - gohlslib v2.4.7 low-latency playlist/segment window: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
 - hls.js start-position and latency control: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/controller/base-stream-controller.ts
 - hls.js live latency controller behaviour: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/controller/latency-controller.ts
+## 2026-11-15 — Candidate replay ingest: MediaMTX LL-HLS fMP4 parts → MP4Box.js → WebCodecs
+
+**Scope:** Feasibility review of MediaMTX v1.21.3 HLS fMP4 output, gohlslib LL-HLS parts, current MP4Box.js sample-extraction API, and W3C WebCodecs AVC registration. Source-level candidate only; no real camera fragment was parsed and no runtime PoC/local changes were made.
+
+### Core idea
+
+Use the existing MediaMTX Low-Latency HLS output as the replay worker's encoded source. A dedicated worker fetches the HLS init segment and successive LL-HLS parts, parses their fragmented MP4 samples with MP4Box.js, stores H.264 access units in a bounded compressed ring, and decodes selected sequences with WebCodecs. The visible live HLS/hls.js player remains independent and continues playing while the replay worker seeks/pauses/steps.
+
+### Verified technical building blocks
+
+- MediaMTX v1.21.3 HLS output passes the stream unit's `u.NTP` and `u.PTS` into gohlslib. gohlslib v2.4.7 produces fragmented MP4 LL-HLS segments/parts and advertises `EXT-X-PROGRAM-DATE-TIME` from segment `startNTP`.
+- MP4Box.js supports progressive parsing and fragmented MP4. Its API supports `createFile()`, `appendBuffer()` with a monotonically increasing `fileStart`, `onReady()`, `setExtractionOptions()`, `start()` and `onSamples()`.
+- MP4Box.js sample extraction exposes per-sample `timescale`, `dts`, `cts`, `duration`, `is_rap` and sample `data`. `cts` is presentation time; `dts` is decode time. The samples are extracted in MP4 track sample/decode order.
+- MP4Box.js documents `createFile(true)` as retaining all mdat data when needed. For a streaming HLS init segment followed by media parts, a PoC should initialize from the `EXT-X-MAP` init segment, call `onReady()`, configure extraction and `start()` before appending media parts; this may allow the default non-retaining mode and prompt sample release. Verify with actual MediaMTX parts.
+- The current MP4Box.js repository is under BSD-3-Clause. This is a permissive license, but the exact pinned version and transitive runtime dependency/license inventory still need review.
+- The W3C AVC WebCodecs registration defines `avc`-format chunks as canonical length-prefixed H.264 access units and uses an `AVCDecoderConfigurationRecord` (`avcC`) as `VideoDecoderConfig.description`. SPS/PPS are carried in the description rather than repeated in every sample.
+- The AVC registration expects a `key` chunk in `avc` format to contain an IDR picture. MP4Box.js `is_rap` must therefore be checked against actual H.264 NAL types/IDR status before mapping it to `EncodedVideoChunk.type = 'key'`.
+- `EncodedVideoChunk.timestamp` is a presentation timestamp in microseconds. The H.264 MP4 sample's `cts` should be converted using `sample.cts * 1_000_000 / sample.timescale`; its `dts` remains useful for verifying decode order and discontinuities. Input chunks must be submitted in decode order, with PTS timestamps; WebCodecs outputs decoded frames in presentation order.
+- This path uses MP4/AVC (`avcC` + length-prefixed sample data), not Annex-B RTP access units. It can therefore avoid the MediaMTX v1.21.3 WebRTC H.264 B-frame rejection, provided the HLS/fMP4 sample order and PTS/DTS are preserved and the browser's WebCodecs H.264 implementation supports the actual profile/level.
+
+### Candidate pipeline
+
+1. Live view: hls.js plays MediaMTX LL-HLS independently, with a measured `liveSyncDuration` target of 1–5 seconds. `requestVideoFrameCallback().mediaTime` identifies the frame actually shown.
+2. Replay ingest: a DedicatedWorker fetches the HLS playlist, init segment (`EXT-X-MAP`) and each new `EXT-X-PART`/completed segment using the same camera path. Prefer LL-HLS blocking reload where supported rather than aggressive polling.
+3. Demux: initialize MP4Box.js from the init segment; after `onReady`, select the video track, extract samples and start parsing before appending media parts. Track each part/segment by discontinuity sequence, media sequence, part index and URI to avoid duplicate samples when a completed segment repeats earlier parts.
+4. Sample record: retain camera/source epoch, codec-config epoch, sample decode order, `dts`, `cts`, `duration`, timescale, random-access flag, byte length, source segment/part identity and the fragment's PDT/NTP mapping.
+5. Compressed ring: retain at least the configured 5–30-second replay horizon, bounded by both time and bytes. Evict only at a valid random-access boundary so every retained delta sample has a preceding usable IDR and matching `avcC`/SPS/PPS configuration.
+6. Decoder: configure WebCodecs `VideoDecoder` using MP4Box.js track codec string and `avcC` description. Submit samples in decode order with `timestamp` derived from CTS and `duration` from sample duration. Bound `decodeQueueSize`; monitor errors, saturation and output cadence.
+7. Display/frame-step: index decoded `VideoFrame`s by their PTS in presentation order. Keep a short bounded decoded hot window; for an older requested position, start from the preceding IDR in the compressed ring and decode forward. Exact adjacent stepping is by decoded-frame index, never by adding a fixed 1/30-second increment.
+8. Bookmark: map the live HLS `mediaTime` through hls.js fragment `startPTS` and `programDateTime` to the same PTS/NTP timeline, then find the corresponding sample in the worker ring. For bookmarks created in replay, use the selected decoded frame's PTS/NTP.
+9. Archive: compare HLS PDT/NTP and sample PTS/DTS against MediaMTX's continuous fMP4 recorder, which receives the same `u.NTP` and stream timestamps. Preserve PTS/DTS offsets for B-frame samples; do not assume PTS equals DTS.
+
+### Potential advantages versus WebRTC encoded transform
+
+- Avoids `RTCRtpScriptTransform` in the WebRTC receive path and its low-latency/no-backpressure constraints.
+- Avoids opening a second WebRTC PeerConnection per camera for replay and avoids MediaMTX's per-reader WebRTC GOP/keyframe-join limitations.
+- Avoids MediaMTX v1.21.3's specific WebRTC H.264 B-frame rejection; HLS/fMP4 plus WebCodecs can represent decode order and presentation timestamps separately.
+- Reuses MediaMTX's existing LL-HLS output and the same fMP4/PTS/NTP timeline as the archive.
+- Uses a pure-JavaScript MP4 parser plus WebCodecs; no FFmpeg binary is inherently required for this replay pipeline.
+- The worker's HTTP requests read the existing HLS muxer output; they do not create a separate MediaMTX `stream.Reader` per replay operation. They add local HTTP/loopback traffic and parser/decode CPU, which still must be measured.
+- The live HLS player and replay WebCodecs worker have independent state. Pausing, seeking or stepping in the replay worker cannot move the live player's playhead.
+
+### Risks and hard gates
+
+- This has not yet been proven against an actual MediaMTX v1.21.3 LL-HLS part. Confirm the init segment, `moof`/`mdat` structure, track ID/timescale, `avcC`, sample extraction and `tfdt`/`trun` timestamps with the real camera stream.
+- Confirm MP4Box.js handles MediaMTX's repeated partial fragments, incremental `fileStart` offsets, playlist reloads and discontinuities without retaining unbounded mdat/sample buffers. Release extracted samples promptly and bound every queue.
+- The HLS parts are only available after part closure (default part target 200 ms) plus HTTP delivery. The replay worker must remain warm; this is not a per-click fetch/decode design.
+- The WebCodecs AVC registration is non-normative and browsers are not required to support H.264. Use `VideoDecoder.isConfigSupported()` and actual decode tests for the exact codec string/profile/level, Windows/Linux browser and GPU.
+- For B-frames, samples must be fed in decode order with PTS timestamps. Validate non-monotonic CTS in decode order, decoder output presentation order, and correct exact stepping both directions. If MP4Box.js extraction order is not the required decode order for the actual parts, reject the path.
+- Validate `is_rap` against actual IDR NAL units. A recovery-point SEI or non-IDR sample must not be mislabeled as an AVC key chunk.
+- MediaMTX's upstream single stored SPS/PPS pair/multiple-PPS risk remains because HLS uses the same MediaMTX stream-format/remux path. Test multiple PPS IDs, parameter-set changes and reconnects.
+- MP4Box.js parser input is media data from the camera path. Run it in a bounded worker, enforce box/sample size limits, handle malformed fragments and reset on codec/track discontinuity.
+- The live HLS player and replay WebCodecs decoder still compete for CPU/GPU and decoder resources. Measure two cameras and simultaneous replay; no impact on live/recording is proven.
+- HLS PDT tags and fragment PTS mapping must remain valid across LL-HLS part updates, playlist delta/reload, discontinuity, PTS offset and segment rotation. The app-side PDT map described above remains required.
+- Cross-camera sync remains limited by independent RTMP NTP-estimator anchors and source-to-server latency; this pipeline improves per-camera archive mapping but does not prove true sensor synchronization.
+
+### Required PoC order
+
+1. Capture one real MediaMTX v1.21.3 HLS init segment and consecutive LL-HLS parts from a real camera. Parse with MP4Box.js in a worker. Log `avcC`, codec string, timescale, sample count, DTS, CTS, duration, `is_rap`, sample byte length and discontinuities.
+2. Feed the extracted samples into WebCodecs. First test no-B-frame source, then B-frame source if available. Verify IDR startup, H.264 profile support, decoded frame count, presentation order, PTS correctness and decoder error recovery.
+3. Build a 30-second compressed sample ring with safe RAP-boundary eviction. Verify bounded memory, no gaps/duplicates and recovery after missing/corrupt parts and camera reconnect.
+4. Decode on demand from preceding IDR to random target PTS. Measure replay button-to-first-display, forward/backward exact frame step, rapid repeated stepping, slow motion and decoder reset/reuse.
+5. Compare live HLS `requestVideoFrameCallback().mediaTime`/PDT mapping with worker sample PTS and later with the fMP4 archive. Verify exact bookmark frame identity.
+6. Run two cameras at target resolution/fps/bitrate, with one and two simultaneous replay operations. Measure CPU, GPU, memory, HLS part lag, decode queue, first-frame latency, frame drops, live delay and recording continuity.
+7. Compare against the separate WebRTC reader + encoded transform + WebCodecs approach. Select only on measured end-to-end performance and compatibility.
+
+### Assessment
+
+This is currently the strongest new architecture candidate to test: LL-HLS provides a compressed, timestamped source already used by MediaMTX; MP4Box.js extracts individual access units; WebCodecs provides exact decoded frame order and step control. It could remove the need for a second WebRTC reader and bypass MediaMTX v1.21.3's WebRTC B-frame limitation while preserving independent live/replay state. However, real-part parsing, sample order, H.264 parameter sets, browser codec support, memory bounds and first-frame latency are unproven. It is a PoC candidate, not an approved architecture. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS output passes NTP/PTS: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- gohlslib v2.4.7 LL-HLS/fMP4 generation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- MP4Box.js API: progressive parsing, fragmented MP4 and sample extraction: https://github.com/gpac/mp4box.js/
+- MP4Box.js BSD-3-Clause license: https://github.com/gpac/mp4box.js/blob/main/LICENSE
+- W3C AVC WebCodecs registration: AVCC samples, avcC description and IDR key chunks: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- W3C WebCodecs VideoDecoder output order, PTS and resource handling: https://www.w3.org/TR/webcodecs/
