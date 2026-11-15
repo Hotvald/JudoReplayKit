@@ -4113,3 +4113,42 @@ MP4Box.js remains plausible as a short-lived fMP4 demuxer, but a single unbounde
 - MP4Box.js v2.5.0 `ISOFile` extraction loop, `releaseUsedSamples()`, `releaseSample()`, `start()`, `stop()` and `flush()`: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
 - MP4Box.js v2.5.0 package release/version: https://github.com/gpac/mp4box.js/blob/v2.5.0/package.json
 - MP4Box.js memory-management guide (payload release behaviour): https://github.com/gpac/mp4box.js/wiki/Memory-managment-in-MP4Box.js
+
+## 2026-11-15 — WebCodecs AVC key chunks require IDR; HLS recovery points are not interchangeable
+
+**Scope:** Cross-check of MediaMTX v1.21.3 / gohlslib v2.4.7 H.264 sample flags against the W3C AVC WebCodecs registration and WebCodecs timestamp semantics. This is a standards/source compatibility finding; no browser decode PoC has been run.
+
+### The important distinction
+
+- MediaMTX/gohlslib marks an H.264 access unit as random access when `mediacommon` detects either an IDR NALU or an immediate recovery-point SEI (`recovery_frame_cnt == 0`). The fMP4 segmenter maps this random-access result to `IsNonSyncSample: false`.
+- MP4Box.js v2.5.0 exposes the MP4 sample sync flag as `sample.is_sync`. Therefore an AU accepted by MediaMTX as a recovery point can appear as an MP4 sync sample even when it does not contain an IDR NALU.
+- The W3C AVC WebCodecs registration says that an `EncodedVideoChunk` marked `type: "key"` in AVC format is expected to contain an IDR picture. In Annex-B format, a key chunk is expected to contain an IDR picture plus all parameter sets needed to decode it. Thus `sample.is_sync` or HLS `INDEPENDENT=YES` is not sufficient to label a WebCodecs AVC chunk as `key`.
+- For the fMP4/AVC route, use the `avcC` record as `VideoDecoderConfig.description`, preserve the sample's length-prefixed AVC payload, and classify `EncodedVideoChunk.type` from actual NAL-unit inspection. A fresh decoder epoch must begin on a real IDR with the matching parameter sets; a recovery-point AU must not be silently promoted to a WebCodecs key chunk.
+
+### Decode order and presentation order
+
+- gohlslib's H.264 fMP4 segmenter extracts DTS, stores it as the sample decode time, and stores `PTS - DTS` as the composition-time offset. MP4Box exposes both `dts` and `cts` for each sample.
+- WebCodecs defines `EncodedVideoChunk.timestamp` as a presentation timestamp and requires `VideoDecoder` outputs in presentation order, including internal reordering where needed.
+- Therefore, if B-frames are present and the browser decoder supports the exact AVC profile/stream, the demuxer should submit samples in MP4 decode order (DTS/sample order) while assigning each chunk's timestamp from CTS/PTS converted to microseconds. Do not sort encoded chunks by CTS before calling `decode()`; that would destroy decode order.
+- This makes the LL-HLS/fMP4/WebCodecs path a plausible B-frame candidate even though the MediaMTX v1.21.3 WebRTC outbound H.264 path separately rejects B-frames. Actual browser decoding and frame-order PoC remains mandatory.
+
+### Required PoC additions
+
+1. Build a small H.264 test set containing IDR-start GOPs, immediate recovery-point SEI GOPs, and B-frame GOPs. Inspect actual NAL units, MP4 sync flags, DTS and CTS.
+2. For a fresh VideoDecoder, submit an IDR chunk marked `key` with the matching avcC description; confirm decode. Then test a recovery-point-only sample separately and confirm it is not treated as a new key chunk.
+3. Feed B-frame samples in decode order with `EncodedVideoChunk.timestamp = CTS` and verify that output VideoFrames arrive in monotonically correct presentation order with the expected frame identity and timestamps.
+4. Repeat with the exact camera bitstream, not only synthetic samples. Record browser, OS, GPU, codec string/profile/level and decoder errors.
+
+### Assessment
+
+This clarifies a critical boundary: MediaMTX's broader random-access classification is useful for segmenting, but is broader than the WebCodecs AVC `key`-chunk contract. B-frames are not automatically disqualifying for the HLS/fMP4 route, but their DTS/CTS path must be proven in the browser. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 pins gohlslib v2.4.7 and mediacommon v2.9.7: https://github.com/bluenviron/mediamtx/blob/v1.21.3/go.mod
+- gohlslib v2.4.7 H.264 DTS extraction, random-access flag and fMP4 PTS offset: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- mediacommon v2.9.7 IDR/immediate recovery-point random-access detection: https://github.com/bluenviron/mediacommon/blob/v2.9.7/pkg/codecs/h264/is_random_access.go
+- mediacommon v2.9.7 recovery-point parser: https://github.com/bluenviron/mediacommon/blob/v2.9.7/pkg/codecs/h264/sei.go
+- MP4Box.js v2.5.0 MP4 sample flags and DTS/CTS fields: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+- W3C AVC (H.264) WebCodecs Registration, sections 2–4: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- W3C WebCodecs presentation timestamp and decoder output ordering: https://www.w3.org/TR/2026/WD-webcodecs-20261102/
