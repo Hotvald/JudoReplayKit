@@ -3825,3 +3825,43 @@ This confirms a clean hybrid retrieval strategy for the LL-HLS → MP4Box.js →
 - gohlslib v2.4.7 completed segment registration and bounded eviction: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
 - gohlslib v2.4.7 segment/part URI naming and LL-HLS SegmentCount minimum: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
 - MediaMTX v1.21.3 HLS request routing and no-cache response handling: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+## 2026-11-15 — MediaMTX HLS muxer lifecycle: default on-demand muxer expires after 60 seconds without requests
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 HLS server, muxer lifecycle, configuration defaults and activity timer. No runtime test or local configuration change.
+
+### Verified behaviour
+
+- MediaMTX v1.21.3 default `hlsAlwaysRemux` is false and default `hlsMuxerCloseAfter` is 60 seconds.
+- When `hlsAlwaysRemux` is false, an HLS muxer is created on demand for a path when a client requests it. The muxer owns a `stream.Reader` and a gohlslib HLS muxer instance.
+- For client-created muxers, MediaMTX checks request activity at intervals of `max(hlsMuxerCloseAfter / 3, 1 second)` and closes the muxer when the time since its last request reaches the configured close-after duration.
+- Each HLS request updates `lastRequestTime`; playlist, segment, part and other media requests therefore keep the muxer alive while a player is actively consuming HLS.
+- When the muxer is closed, `muxer.run()` closes its `muxerInstance`; the instance closes the gohlslib muxer and its retained segment/part storage. The in-memory rolling HLS history is therefore not persistent across an idle close.
+- With `hlsAlwaysRemux` enabled and a non-source-on-demand path, MediaMTX creates an automatic muxer when the path becomes ready. The automatic muxer does not use the client inactivity timer; it remains active until the path/server lifecycle closes it.
+- The HLS muxer is separate from the recorder. A closed HLS muxer does not imply the continuous recording stops, but it does mean the HLS replay history is lost and must warm up again after the next HLS request.
+
+### Consequences for JudoReplayKit
+
+- If HLS is used as a continuous rolling replay buffer from the start of a tournament, it cannot rely on an HLS browser tab remaining open. Either enable `hlsAlwaysRemux` for the camera paths or run a dedicated lightweight worker that continues requesting HLS often enough to prevent the 60-second inactivity close.
+- `hlsAlwaysRemux` is the more deterministic option for continuous warm history but adds ongoing HLS remuxing and a reader per camera. Measure its CPU, memory, queue discards and effect on recording with both cameras active.
+- If using a keep-alive worker instead, it must fetch playlists/parts reliably and account for its own failure/restart. If it stops for 60 seconds, the buffer can disappear even though MediaMTX recording continues.
+- On HLS muxer recreation, the app must start a new buffer epoch, fetch the new init segment, rebuild timestamp mappings and wait for a valid IDR before declaring replay ready. It must not silently present an empty or stale history.
+- Test path source-on-demand separately: `hlsAlwaysRemux` only creates automatic muxers for paths that are not configured source-on-demand.
+
+### Required PoC tests
+
+1. With default `hlsAlwaysRemux=false`, request HLS then stop all HLS requests for 65–90 seconds. Confirm the muxer closes, segment URIs disappear and the next client must warm up a new buffer.
+2. Repeat with `hlsAlwaysRemux=true`; confirm the HLS muxer remains active and the rolling segment window continuously advances without a browser client.
+3. Repeat with two camera paths, continuous MediaMTX recording and the replay worker; measure CPU, memory, HLS reader queue discards, disk writes and recording continuity.
+4. Restart one camera/path and verify the HLS muxer and replay worker establish a new source/codec/time epoch without cross-epoch bookmarks.
+5. Confirm the configured `hlsSegmentCount` retains the required 30-second horizon plus margin even with variable GOP/segment duration.
+
+### Assessment
+
+This is a material operational requirement for the HLS/WebCodecs candidate. The HLS rolling window is not a permanent or always-on buffer under MediaMTX defaults: it is demand-created and normally closed after 60 seconds without HLS requests. `hlsAlwaysRemux` can provide a continuously warm HLS history, but its two-camera resource cost must be measured. This does not invalidate the candidate, but it must be an explicit PoC gate and configuration decision. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS server automatic muxer creation (`hlsAlwaysRemux`): https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
+- MediaMTX v1.21.3 HLS muxer lifecycle, on-demand activity timer and instance recreation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
+- MediaMTX v1.21.3 HLS muxer instance close/reader lifecycle: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+- MediaMTX v1.21.3 configuration defaults (`hlsAlwaysRemux=false`, `hlsMuxerCloseAfter=60s`): https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
