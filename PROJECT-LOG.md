@@ -3638,3 +3638,41 @@ This removes one uncertainty in the HLS timestamp design: MediaMTX/gohlslib deli
 - gohlslib v2.4.7 leading-track selection (video preferred): https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
 - gohlslib v2.4.7 H.264 DTS/PTSOffset and random-access segment rotation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
 - gohlslib v2.4.7 PDT playlist serialization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+## 2026-11-15 — H.264 recovery-point SEI is not equivalent to a WebCodecs AVC IDR key chunk
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3/gohlslib H.264 random-access handling and the current W3C AVC WebCodecs registration. Source-level compatibility finding; no runtime PoC.
+
+### Verified findings
+
+- MediaMTX's H.264 `IsRandomAccess()` implementation returns true for an IDR NAL unit. It also returns true when an SEI recovery-point message appears before a subsequent non-IDR slice in the access unit.
+- gohlslib v2.4.7 uses `h264.IsRandomAccess()` when marking H.264 fMP4 samples as sync/non-sync and when deciding whether to rotate an HLS segment. Therefore an HLS segment can begin at a recovery-point access unit that is not an IDR picture.
+- MP4Box.js exposes a sample-level `is_rap` flag derived from MP4 sync-sample metadata. That flag may therefore describe a MediaMTX recovery-point sample, not necessarily an IDR.
+- The W3C AVC WebCodecs registration states that an `EncodedVideoChunk` marked `type: 'key'` in `avc` format is expected to contain an IDR picture. It does not define recovery-point SEI as a substitute for an IDR key chunk.
+
+### Consequences for HLS/MP4Box/WebCodecs replay
+
+1. Do not map MP4Box.js `sample.is_rap` or the MP4 sync-sample flag directly to `EncodedVideoChunk.type = 'key'` without inspecting the H.264 NAL units.
+2. Parse the length-prefixed NAL units in each sample. Distinguish at least IDR NAL type 5, non-IDR slices, and recovery-point SEI messages.
+3. For a WebCodecs decoder reset/start, use only a verified IDR access unit as the `key` chunk, with the matching `avcC`/SPS/PPS configuration.
+4. A recovery-point access unit may be retained as a `delta` chunk when decoding continues from an earlier valid IDR and the full dependency chain is present. Do not treat it as a standalone decoder restart point.
+5. Ring eviction must retain the preceding actual IDR and all dependent access units. A MediaMTX/HLS segment boundary marked by recovery-point SEI is not necessarily a safe WebCodecs ring eviction boundary.
+6. If the actual PRISM source emits recovery points but no sufficiently frequent IDRs, measure time-to-next-IDR and determine whether this makes on-demand replay too slow. This is a source compatibility gate.
+
+### Required PoC tests
+
+- Inspect every MP4Box-extracted H.264 sample's NAL types and compare actual IDR presence with MP4 `is_rap`/sync flags.
+- Feed an actual recovery-point sample to WebCodecs as `delta` after a prior IDR and verify decoding; separately confirm that marking the same sample as `key` is rejected or fails to produce valid output.
+- Reset/recreate the decoder at actual IDR only and verify correct first decoded frame.
+- Evict the compressed ring at both MP4 sync-sample boundaries and actual IDR boundaries; verify that only the latter guarantees a self-contained WebCodecs decode start.
+- Test actual PRISM streams for IDR interval, recovery-point interval, SPS/PPS availability and reconnect behaviour.
+
+### Assessment
+
+This does not invalidate the HLS/fMP4 → MP4Box.js → WebCodecs candidate, but it tightens its keyframe and ring-eviction logic. MediaMTX's broader random-access classification is suitable for its own HLS/MSE pipeline but cannot be assumed to satisfy WebCodecs AVC's stricter IDR key-chunk contract. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 H.264 random-access handling: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- mediacommon H.264 `IsRandomAccess()` includes recovery-point SEI: https://github.com/bluenviron/mediacommon/blob/059ab2e28705f0c8cac17465bf969ee39d9ba73d/pkg/codecs/h264/is_random_access.go
+- gohlslib v2.4.7 H.264 random-access and sync-sample logic: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- W3C AVC WebCodecs registration, IDR requirement for `type: 'key'`: https://www.w3.org/TR/webcodecs-avc-codec-registration/
