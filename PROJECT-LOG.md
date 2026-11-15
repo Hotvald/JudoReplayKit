@@ -2887,3 +2887,40 @@ The direct WebRTC-to-WebCodecs path has a clear standards-compatible bitstream c
 - W3C WebCodecs VideoDecoderConfig: https://www.w3.org/TR/webcodecs/
 - MDN VideoDecoder.configure(): https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder/configure
 - W3C WebCodecs issue explaining the latency-versus-throughput motivation: https://github.com/w3c/webcodecs/issues/206
+## 2026-11-15 — Experimental alternative: re-encode decoded replay frames as independent key chunks
+
+**Scope:** Standards-based feasibility review of WebCodecs VideoEncoder key-frame controls and AVC registration. This is an exploratory cache alternative only; no runtime PoC, no image-quality measurements, no local changes, and no architecture decision.
+
+### Feasibility
+
+- WebCodecs `VideoEncoderEncodeOptions.keyFrame = true` requires the given frame to be encoded as a key frame. The AVC WebCodecs registration says an AVC-format key chunk is expected to contain an IDR picture, with parameter sets supplied in `VideoDecoderConfig.description`; Annex B key chunks are expected to contain an IDR picture and all parameter sets required by their slices.
+- Therefore, in principle, a dedicated replay worker could decode each incoming original H.264 access unit, pass each decoded VideoFrame to a separate VideoEncoder with `keyFrame: true`, and store the resulting independent encoded chunks. Any stored frame could then be decoded from a single chunk rather than replaying a long dependency chain from an earlier camera IDR.
+- The encoder can request hardware acceleration, but it remains a hint and actual backend/throughput must be measured. WebCodecs does not require H.264 encoder support on every implementation.
+- `VideoEncoderConfig.latencyMode = 'realtime'` may prioritize low latency but the specification permits frame drops to meet bitrate/framerate targets and may sacrifice quality. `quality` mode must not drop frames to meet bitrate/framerate targets but may increase latency. For a referee review cache, dropped frames are unacceptable; encoder output must be monitored and gaps explicitly recorded.
+
+### Major disadvantages
+
+- This is a second lossy encode after the original camera H.264 decode. The WebCodecs AVC registration does not promise a lossless path or a uniform quality/quantizer interpretation across browsers and hardware. Fine detail can be lost or altered, which is especially concerning for referee review.
+- Making every frame an IDR/key chunk removes temporal prediction and can substantially increase bitrate and storage compared with the original inter-frame H.264 stream. The actual expansion depends heavily on scene motion, resolution, quality settings and encoder implementation; no generic compression ratio should be assumed for judo footage.
+- The pipeline adds decode plus encode work for both cameras, competing for GPU/decoder/encoder resources. Hardware encoding can also share finite codec resources with hardware decoding and the live display path.
+- A re-encoded cache is a derivative preview, not a replacement for the continuously recorded original camera stream. Original recordings and their timestamps must remain authoritative and untouched.
+
+### PoC design if lower-memory caches are needed
+
+1. Keep the original compressed H.264 ring and continuous archive as authoritative sources.
+2. In a dedicated replay worker, test an optional all-intra derivative cache using `VideoEncoder` and `keyFrame: true` on every decoded output frame.
+3. Test `quality` mode first to avoid intentional frame dropping; test `realtime` only as a separate comparison and count every dropped/missing frame.
+4. Compare H.264 AVC and any other genuinely supported independent-frame codec only after `VideoEncoder.isConfigSupported()` and real encode/decode verification. Store the matching decoder description/configuration with each cache generation.
+5. Measure output bytes/frame and sustained bitrate on actual judo footage, encode latency, encoder queue size, GPU/CPU, decoder/encoder resource contention, two-camera stability, and exact one-frame-per-input correspondence.
+6. Perform objective and visual quality comparison against the original decoded frame, including fast hand/foot contact, grip changes, boundary positions, small score indicators and motion blur. Reject if any material detail is lost or frames are missing.
+7. Confirm that each encoded chunk marked key really decodes independently with a fresh decoder and the stored config; do not infer independent decodability from the requested keyFrame flag alone.
+
+### Assessment
+
+An all-intra derivative cache is technically feasible and could make arbitrary frame access simpler while reducing storage compared with raw decoded frames. However, its likely bitrate expansion, second-generation quality loss and extra encode load make it a lower-priority experimental fallback. It must never replace the original archive or be accepted without image-fidelity evidence. The preferred near-term PoC remains direct encoded ring plus a bounded warm decoded cache; all-intra encoding is an optional branch if memory tests fail. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs VideoEncoder key-frame requirement: https://www.w3.org/TR/webcodecs/
+- W3C AVC (H.264) WebCodecs Registration: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- MDN WebCodecs usage guide: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
