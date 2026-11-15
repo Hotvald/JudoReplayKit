@@ -1591,3 +1591,13 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - This is a user-approved installation for the purpose of verifying MediaMTX release provenance. It does not verify the MediaMTX archive itself.
 - The current PowerShell session may not have refreshed PATH. Next: open a new PowerShell window and run `gh --version`; then verify the existing archive with GitHub Artifact Attestations using repository `bluenviron/mediamtx` before extracting or executing it.
 - No MediaMTX/FFmpeg archive extraction or execution; no server, service, firewall, stream, or recording changes.
+
+
+### Addendum — GitHub CLI available in fresh PowerShell session
+
+**Source:** User-provided PowerShell output, 2026-11-15.
+
+- Fresh PowerShell session reports `gh version 2.104.0 (2026-11-12)`.
+- GitHub CLI is now available for the planned MediaMTX attestation verification.
+- Next command to run against the existing, unextracted archive: `gh attestation verify "C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip" --repo bluenviron/mediamtx`.
+- Do not extract or execute the archive unless the attestation verification succeeds and the verified signer/workflow/source are reviewed.
