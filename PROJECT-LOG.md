@@ -1803,3 +1803,41 @@ Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and a
 
 No local files were extracted or executed. No MediaMTX server was started. No production or Rev.8 files, services, firewall rules, ports or recordings were changed. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
 
+
+
+## 2026-11-15 — FFmpeg dependency recipes and libaribb24 LGPL check
+
+**Source:** FFmpeg-Builds repository tree and source files at recipe commit `c9fe5114060e507409f7ee07edfd82efaf25d767`; FFmpeg `configure` and licence classification at source commit `d838f9f9aeb0e09b4d068e2af20a46a12640696f`; upstream libaribb24 source at commit `5e9be272f96e00f15a2f3c5f8ba7e124862aec38`. Read-only public-source review. No local extraction or execution.
+
+### Findings
+
+- The exact build-recipe tree contains per-dependency scripts under `scripts.d/`. These scripts declare source repositories/commits, build options, static/shared settings, and dependency relationships. This makes a more precise source/version inventory possible than relying on linker names alone.
+- The pinned FFmpeg 9.0 `configure` classifies `gmp`, `libaribb24`, `libopencore_amrnb`, `libopencore_amrwb`, `libvo_amrwbenc`, `mbedtls`, and `rkmpp` in its LGPLv3/version-3 external-library list. The same configure file has separate GPL, GPLv3 and nonfree lists. The actual candidate build log must still be cross-checked against all enabled options; the linker list alone does not prove every library was enabled as a direct FFmpeg feature.
+- The exact `scripts.d/50-libaribb24.sh` recipe pins upstream source commit `5e9be272f96e00f15a2f3c5f8ba7e124862aec38`. It changes `AC_INIT([aribb24], [1.0.3], ...)` to version 1.0.4 in `configure.ac`, with a recipe comment that upstream changed to LGPL. The pinned upstream `COPYING` file is the GNU LGPL version 3 text. The pinned upstream `configure.ac` itself still reports 1.0.3.
+- The pinned FFmpeg 9.0 configure check requires `aribb24 > 1.0.3` to enable `libaribb24` without `--enable-gpl`. The recipe's version adjustment therefore appears intended to satisfy FFmpeg's version gate for an LGPLv3 source snapshot. It changes the package version metadata; it does not itself change the source licence. This is a source/build-recipe observation, not an independent legal conclusion about the complete patch set or distribution.
+- Three patches are applied to the libaribb24 source in this recipe (`12.patch`, `13.patch`, `17.patch`). They modify decoder/parser behaviour. Their origin and compatibility should be retained in any source bundle and included in a complete source/rebuild record.
+- The build-recipe scripts also show a number of optional features and dependencies that are not inherently required for the JudoReplayKit use case. Examples include subtitle/font/rendering stacks, multiple video/audio codec libraries, SDL/GUI support, and specialist broadcast/codec components. A deliberately minimal build may reduce binary size and the third-party compliance surface, but only if PoCs confirm the required ingest, recording, demux/mux, decode and replay operations still work.
+- A raw count of 161 distinct `-l` names in the linker log remains a count of linker identifiers, **not** a count of 161 third-party packages or licence obligations. It includes system/internal libraries and transitive dependencies. The actual dependency closure and package contents must be established before drawing conclusions.
+
+### Next technical review
+
+1. Map the actual candidate build's enabled FFmpeg components and static dependency closure to the exact `scripts.d` recipes, source commits/archives, patches and licences.
+2. Define a proposed minimal feature set for JudoReplayKit: likely H.264 video, required container/protocol support for the chosen camera streams and recording format, and the demux/decode/mux operations required by the live-edge and replay PoCs. Do not assume a protocol or container until the camera/recording PoCs establish it.
+3. Compare that proposed feature set with FFmpeg's built-in capabilities first; add external libraries only where a demonstrated requirement needs them.
+4. Build and test any minimal candidate separately, recording exact configure flags, dependency sources, build environment, linker inputs, package contents and licence notices. No candidate is approved merely because it is smaller.
+5. Send the resulting evidence and unresolved questions to DeepSeek and Mistral for independent critical review before making a tooling/distribution decision.
+
+### Decision and safety status
+
+- The existing FFmpeg ZIP remains **not approved** for bundling or distribution in JudoReplayKit.
+- It remains unextracted and unexecuted. No local files, protected folders, services, streams, firewall rules, ports or recordings were changed.
+- No architecture or dependency choice is approved by this review.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence links
+
+- Recipe tree commit: https://github.com/FFmpeg-Builds/FFmpeg-Builds/tree/c9fe5114060e507409f7ee07edfd82efaf25d767
+- libaribb24 recipe: https://github.com/FFmpeg-Builds/FFmpeg-Builds/blob/c9fe5114060e507409f7ee07edfd82efaf25d767/scripts.d/50-libaribb24.sh
+- libaribb24 pinned upstream source: https://github.com/nkoriyama/aribb24/tree/5e9be272f96e00f15a2f3c5f8ba7e124862aec38
+- FFmpeg configure: https://github.com/FFmpeg/FFmpeg/blob/d838f9f9aeb0e09b4d068e2af20a46a12640696f/configure
+- FFmpeg source licence overview: https://github.com/FFmpeg/FFmpeg/blob/d838f9f9aeb0e09b4d068e2af20a46a12640696f/LICENSE.md
