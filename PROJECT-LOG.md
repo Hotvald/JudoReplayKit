@@ -1617,3 +1617,21 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - No MediaMTX server, stream, service, firewall rule, port or recording was started or changed. Protected production and Rev.8 locations remain untouched.
 
 **Next step:** Owner may choose whether to authenticate GitHub CLI interactively. If authenticated, run `gh auth status`, then retry the attestation command and inspect the reported repository, signer and workflow. Do not extract or execute the archive unless verification succeeds and provenance is reviewed.
+
+
+### Addendum — MediaMTX v1.21.3 GitHub Artifact Attestation verified
+
+**Source:** User-provided complete PowerShell output, 2026-11-15. **Environment:** Local verification of the isolated Rev.9 PoC1 download.
+
+- The owner completed GitHub CLI authentication. `gh auth status` reported an active login to `github.com` as `Hotvald`, using HTTPS. No credential or token value is recorded here.
+- The owner ran:
+  `gh attestation verify "C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip" --repo bluenviron/mediamtx`.
+- GitHub CLI loaded digest `sha256:b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74` for the local archive and loaded one attestation from the GitHub API.
+- The enforced policy required SLSA provenance v1; source owner `https://github.com/bluenviron`; source repository `https://github.com/bluenviron/mediamtx`; signer subject matching the MediaMTX repository; and GitHub Actions OIDC issuer `https://token.actions.githubusercontent.com`.
+- GitHub CLI reported **Verification succeeded!** One attestation matched the policy.
+- Reported build repository and signer repository were both `bluenviron/mediamtx`. Both build and signer workflow were `.github/workflows/release.yml@refs/tags/v1.21.3`.
+- This verifies the archive's provenance against the specified GitHub attestation policy. It is not a complete security audit of the binary, nor a complete license/redistribution audit.
+- The archive remains unextracted and unexecuted at the time of this entry. FFmpeg has not yet been downloaded or verified. Do not infer that PoC1 is ready to run.
+- No MediaMTX server, stream, service, firewall rule, port or recording was started or changed. Protected production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` remain untouched.
+
+**Next step:** Record this successful attestation, then separately verify the FFmpeg download's publisher-controlled integrity/provenance and inspect its exact build configuration/licensing evidence. Only after the tool package checks are reviewed should extraction/execution be considered. Continue isolated PoC work only; architecture lock and full Rev.9 implementation remain NO-GO pending feasibility evidence.
