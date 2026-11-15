@@ -4152,3 +4152,39 @@ This clarifies a critical boundary: MediaMTX's broader random-access classificat
 - MP4Box.js v2.5.0 MP4 sample flags and DTS/CTS fields: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
 - W3C AVC (H.264) WebCodecs Registration, sections 2–4: https://www.w3.org/TR/webcodecs-avc-codec-registration/
 - W3C WebCodecs presentation timestamp and decoder output ordering: https://www.w3.org/TR/2026/WD-webcodecs-20261102/
+
+## 2026-11-15 — MediaMTX HLS client sessions add lightweight stream readers in addition to the shared muxer
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 HLS session, server, muxer and stream-reader code. This is a source-level topology finding; runtime queue impact has not been measured.
+
+### Verified reader topology
+
+- MediaMTX keeps one HLS muxer per path and `getOrCreateMuxer()` returns the existing muxer when one already exists. The muxer instance owns its own `stream.Reader` and gohlslib HLS muxer. Individual HTTP playlist/segment/part requests are handled by that muxer; they do not each create a new HLS muxer.
+- Separately, each HLS session creates a `stream.Reader` and registers a no-op callback for every original media format supported by the muxer. The source comment says this reader exists to account for outbound bytes for each HLS session, even though sessions are not directly attached to the stream through the muxer.
+- Each such reader receives the stream's configured `WriteQueueSize` (default 512), owns a ring buffer and worker goroutine, and increments `OutboundFramesDiscarded` if callbacks cannot be queued. The no-op callback should be inexpensive, but a second HLS session is not literally free and adds another reader queue/worker plus per-frame callback traffic.
+- HLS session lookup can reuse a session when the request carries its session token and matches the path and client IP. A new playlist request without the existing session token can create a separate HLS session even though it reuses the same path muxer.
+
+### Consequence for live + replay consumption
+
+- A live HLS player and a replay worker can share the same path muxer and its primary HLS conversion queue. However, if the replay worker starts a separate HLS session, MediaMTX also creates an additional lightweight accounting reader. This is smaller than a second full HLS muxer but must be included in the isolation/load test.
+- Do not assume that each part GET creates a reader; the additional reader is per HLS session, not per media resource request.
+- If an implementation considers reusing the live player's HLS session token for replay requests, test the exact URL/session lifecycle and IP binding. Do not assume that a token can or should be shared across workers without a deliberate design and security review.
+
+### Required PoC additions
+
+1. Run one live HLS client and one replay worker on the same path, first using a shared HLS session token and then using separate sessions. Inspect MediaMTX API HLS session/muxer lists, reader counts, outbound frame discards, queue behavior, CPU and memory.
+2. Verify that concurrent playlist, part and segment GETs use the expected existing muxer and do not create duplicate muxers for the same path.
+3. Stress the replay worker while live playback and continuous recording are active. Confirm that additional session-reader queue pressure does not cause live frame loss, recording discontinuity or unacceptable CPU/memory growth.
+
+### Assessment
+
+This refines the isolation model: HTTP resource requests share the path muxer, but each distinct HLS session adds a lightweight MediaMTX stream reader. It does not establish a live-impact defect; measure the actual cost. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS session creation, muxer acquisition and per-session no-op reader: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/session.go
+- MediaMTX v1.21.3 one-muxer-per-path lookup and muxer lifecycle: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
+- MediaMTX v1.21.3 HLS muxer instance owns one stream reader: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+- MediaMTX v1.21.3 reader ring buffer, worker and discard counter: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 stream AddReader/RemoveReader and queue-size assignment: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+- MediaMTX v1.21.3 default WriteQueueSize: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
