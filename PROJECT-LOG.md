@@ -1723,3 +1723,25 @@ Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and a
 - FFmpeg source commit: https://github.com/FFmpeg/FFmpeg/commit/d838f9f9aeb0e09b4d068e2af20a46a12640696f
 
 **Next review:** Use the exact configure log and build dependency list to review third-party licences and the Docker/toolchain inputs. Do not extract or execute the candidate archive until that review and the provenance decision are complete. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+
+## 2026-11-15 — FFmpeg exact Windows LGPL 9.0 build log reviewed
+
+**Source:** Public GitHub Actions workflow run and exact Windows build-job log from `FFmpeg-Builds/FFmpeg-Builds`, inspected through the GitHub connector. No local archive extraction or execution.
+
+- Located workflow run #3217, run ID `43593293993`, for release `autobuild-2026-11-14-12-37`.
+- Located exact job **Build ffmpeg (win64, lgpl 9.0)**, job ID `132445937945`. The job log identifies the candidate archive `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip`.
+- The job log records cloning FFmpeg from `https://github.com/FFmpeg/FFmpeg.git`, branch `release/9.0`.
+- The source revision represented by the archive is FFmpeg commit `d838f9f9aeb0e09b4d068e2af20a46a12640696f` (short hash `d838f9f9ae`), matching the version suffix in the archive name.
+- The effective configure log includes `--enable-version3 --disable-debug`. It does not show `--enable-gpl` or `--enable-nonfree`; it includes explicit disable flags for several GPL-associated libraries, including libx264, libx265, libxavs2 and libxvid. This is useful evidence about the FFmpeg configure selection, but it is not a complete legal review of every dependency or redistributed component.
+- The build log lists numerous enabled external libraries, including libaom, dav1d, rav1e, SVT-AV1, libass, libbluray, libjxl, libmp3lame, libopus, libplacebo, librist, libssh, libtheora, libvpx, libwebp, libxml2, libvorbis and libzimg. Their exact versions, licences, notices and redistribution obligations still need assessment.
+- The packaging log indicates the archive contains `ffmpeg.exe`, `ffprobe.exe`, `ffplay.exe`, documentation, presets and `LICENSE.txt` copied from FFmpeg's `COPYING.LGPLv3`.
+- The FFmpeg ZIP SHA-256 matches the release manifest: `0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`. This verifies correspondence to the published checksum manifest, not independent publisher identity or build provenance.
+- GitHub Artifact Attestation verification for this digest/repository previously returned HTTP 404. Attestation/provenance therefore remains unverified; the 404 does not prove the archive is malicious or that no other provenance evidence exists.
+- Workflow run: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993
+- Exact build job: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
+- FFmpeg source commit: https://github.com/FFmpeg/FFmpeg/commit/d838f9f9aeb0e09b4d068e2af20a46a12640696f
+
+**Next review:** Inspect the Docker/base-image and toolchain inputs for this exact job, then build a component-by-component licence/notice inventory for the enabled external libraries. Do not extract or execute the candidate archive until the remaining provenance and licence review is complete. No MediaMTX server was started. No production or Rev.8 files, services, firewall rules, ports, or recordings were changed.
+
+**Overall status:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.
