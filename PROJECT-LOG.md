@@ -1,6 +1,6 @@
 # JudoReplayKit — Project Log
 
-Last updated: 2026-11-08
+Last updated: 2026-11-15
 
 ## Purpose
 
@@ -1701,3 +1701,25 @@ The user supplied the FFmpeg-Builds workflow `.github/workflows/build.yml` and t
 FFmpeg ZIP SHA-256 matches the release manifest: `0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`. GitHub CLI attestation lookup against `FFmpeg-Builds/FFmpeg-Builds` returned HTTP 404; provenance remains unverified, not proven invalid. ZIP remains unextracted and unexecuted. MediaMTX remains separately verified by its GitHub attestation and has not been extracted or started.
 
 Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and any add-ins it references). No local commands to run, no extraction, no server start, and no changes to protected production or Rev.8 locations. Status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation.
+
+
+## 2026-11-15 — FFmpeg build workflow and exact source revision identified
+
+**Source:** Public GitHub Actions run and job logs from `FFmpeg-Builds/FFmpeg-Builds`; reviewed through the GitHub connector. This is direct build-log evidence, not a local execution.
+
+- Located the release workflow run associated with release `autobuild-2026-11-14-12-37`: Build FFmpeg run **#3217**, run ID `43593293993`, completed successfully on 2026-11-14.
+- Located the exact build job: **Build ffmpeg (win64, lgpl 9.0)**, job ID `132445937945`, which produced the exact candidate filename `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip`.
+- The job log records the source command `git clone --filter=blob:none --branch=release/9.0 https://github.com/FFmpeg/FFmpeg.git ffmpeg`.
+- The archive's version suffix `n9.0.2-57-gd838f9f9ae` resolves in the official FFmpeg repository to full commit `d838f9f9aeb0e09b4d068e2af20a46a12640696f` (short form `d838f9f9ae`). This identifies the source revision represented by the produced binary.
+- The job log confirms the selected LGPL settings: `--enable-version3 --disable-debug`; it also records the full effective configure command. Relevant negative flags include `--disable-libfdk-aac`, `--disable-libx264`, `--disable-libx265`, `--disable-libxavs2`, and `--disable-libxvid`. The configure command shown does not include `--enable-gpl` or `--enable-nonfree`. This is strong build-configuration evidence, but not a complete legal audit of every linked dependency.
+- The log records enabled external libraries/features including (among others) libaom, dav1d, rav1e, SVT-AV1, libass, libbluray, libjxl, libmp3lame, libopus, libplacebo, librist, libssh, libtheora, libvpx, libwebp, libxml2, libvorbis, libzimg, and others. Each enabled dependency and its licence/redistribution terms still needs review before adopting the package in a distributed JudoReplayKit product.
+- Packaging log confirms the ZIP contains `ffmpeg.exe`, `ffprobe.exe`, `ffplay.exe`, FFmpeg documentation, presets, and `LICENSE.txt` copied from FFmpeg's `COPYING.LGPLv3`.
+- The GitHub Actions job and release were successful. This does not resolve the earlier GitHub Artifact Attestation HTTP 404; provenance attestation remains unverified. The successful release checksum comparison only establishes a match to the release manifest.
+- The FFmpeg archive remains unextracted and unexecuted. No MediaMTX server was started. No protected production or Rev.8 files, services, firewall rules, ports, or recordings were changed.
+
+**Evidence links:**
+- Workflow run: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993
+- Exact build job: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
+- FFmpeg source commit: https://github.com/FFmpeg/FFmpeg/commit/d838f9f9aeb0e09b4d068e2af20a46a12640696f
+
+**Next review:** Use the exact configure log and build dependency list to review third-party licences and the Docker/toolchain inputs. Do not extract or execute the candidate archive until that review and the provenance decision are complete. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
