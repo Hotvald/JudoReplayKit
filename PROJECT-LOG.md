@@ -4306,3 +4306,41 @@ MediaMTX's fan-out design provides per-reader queue and callback-error isolation
 - MediaMTX v1.21.3 stream reader registration/removal: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
 - MediaMTX v1.21.3 recorder callback registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4.go
 - MediaMTX v1.21.3 HLS callback registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+
+## 2026-11-15 — Additive correction: gohlslib v2.4.7 disk-backed part reads have an unsynchronized finalization race
+
+**Source:** Follow-up exact source trace of gohlslib v2.4.7 after the earlier LL-HLS part-rotation note. This entry adds a stronger finding; it does not delete or rewrite the earlier, more cautious assessment. No Go race-detector run has yet been performed.
+
+### Exact source path
+
+- A completed LL-HLS part is registered with an HTTP handler in muxer_stream.go. That handler calls part.reader() directly; it does not acquire the muxerStream mutex before doing so.
+- For disk-backed storage, partDisk.Reader() checks p.buffer. If it is non-nil, it calls p.buffer.Bytes() and returns a reader over the in-memory bytes. If it is nil, it calls newDiskPartReader() using p.offset and p.size.
+- When the parent fMP4 segment is finalized, muxerSegmentFMP4.finalize() calls fileDisk.Finalize(). That method sets the last part's size, then iterates through the parts and assigns p.buffer = nil before closing the parent file.
+- The parent segment rotation is protected by the gohlslib muxer mutex, but the already-registered part HTTP handler does not acquire that mutex when it calls part.reader(). The fileDisk.Finalize()/partDisk.Reader() transition therefore has no shared lock protecting the buffer pointer and size fields.
+- In particular, partDisk.Reader() reads p.buffer once for the nil check and again for p.buffer.Bytes(). Concurrently assigning p.buffer = nil is an unsynchronized read/write of the pointer. The final-part p.size field is also written during parent finalization and can be read by the disk-range reader without a shared synchronization mechanism.
+
+### Assessment
+
+This is stronger than a generic “possible race” based only on the absence of an obvious part-level mutex: the exact reader and finalizer code access the same mutable fields without a common lock. It is a **source-derived data-race candidate** for disk-backed LL-HLS part requests that overlap parent-segment finalization. Depending on timing, the pointer transition may produce a race-detector report and may allow a nil dereference or an incorrect disk-range size. This is not yet a reproduced crash, corrupted response, or confirmed upstream bug; runtime proof is still required.
+
+The earlier RAM-vs-disk distinction remains important:
+- RAM-backed part storage does not perform the same parent-finalization buffer-nil transition.
+- Disk-backed storage uses the dual RAM/disk part reader and is the specific path implicated here.
+- The race window concerns a part that has already been finalized and made addressable, while its parent segment is subsequently being finalized.
+
+### Required verification and remediation gate
+
+1. Build a Go test against the exact pinned gohlslib v2.4.7 source with disk-backed storage.
+2. Repeatedly request the final part of a segment while forcing the parent segment to rotate/finalize. Run the test with the Go race detector; retain the full race report and exact goroutine stacks.
+3. Verify HTTP status, response length, MP4 parseability and byte-for-byte equality against a stable copy. Include requests immediately before, during and after parent finalization.
+4. Repeat the same stress test with RAM-backed storage as a control.
+5. If reproduced, fix synchronization at the storage abstraction boundary (or take a safe immutable snapshot of the reader state) and add a regression test. Do not patch around it only in JudoReplayKit's fetch loop, because the mutable state is inside the library.
+6. Re-run the two-camera live + recording + replay load test after any upstream/library patch.
+
+### Evidence
+
+- gohlslib v2.4.7 part HTTP handler calls part.reader() without taking muxerStream.mutex: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 partDisk.Reader() reads buffer and falls back to disk using offset/size: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_disk.go
+- gohlslib v2.4.7 fileDisk.Finalize() writes final part size, nils part buffers and closes the file: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/file_disk.go
+- gohlslib v2.4.7 parent segment finalization calls storage.Finalize(): https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segment_fmp4.go
+- gohlslib v2.4.7 segment rotation and muxer-level synchronization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
