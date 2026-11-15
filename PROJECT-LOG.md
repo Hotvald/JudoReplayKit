@@ -1521,3 +1521,21 @@ These observations establish the reported state at preflight time only. “Not f
 - Before starting MediaMTX or opening ports, inspect and verify the installed binaries, versions, checksums and exact FFmpeg build configuration/licensing evidence. No server has been authorized or reported started yet.
 
 No application code, requirements, architecture or configuration was changed by this preflight/setup hand-off. Requirements Draft 0.4 and DECISIONS.md remain unchanged. The overall Rev.9 status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock and full implementation.
+
+## 2026-11-15 — PoC 1 tool setup halted at MediaMTX checksum retrieval
+
+**Source:** User-provided PowerShell output. **Environment:** Rev.9 isolated development workspace only. **Status:** STOPPED; no tool installation verified.
+
+- The user successfully invoked `01-Download-PoC1-Tools.ps1` by its fully qualified path from the extracted setup package.
+- The script began at 16:09:15 and targeted workspace `C:\\JudoReplayKit_Rev9_Dev`.
+- It downloaded the official MediaMTX v1.21.3 Windows amd64 archive from the GitHub release URL to `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip`; reported size was 27.4 MiB.
+- It then attempted to download `https://github.com/bluenviron/mediamtx/releases/download/v1.21.3/checksums.sha256` to `mediamtx-checksums.sha256`.
+- The script stopped with: `Download missing or unexpectedly small`. Therefore the checksum was not verified, extraction/installation did not proceed, and FFmpeg setup was not reached.
+- This is a failure in the setup workflow/checksum retrieval, not evidence that the downloaded archive is corrupt or authentic. The archive must not be extracted or executed until integrity/authenticity is independently established using an authoritative verification method.
+- The script's stop behavior is correct and must not be bypassed. No server start, service change, port opening or firewall change was reported.
+
+### Next diagnostic step
+
+Inspect the exact setup script and its checksum-download logic, plus the downloaded archive's file metadata and SHA-256, without executing or extracting the archive. Verify the release's supported integrity mechanism (including the publisher's documented GitHub artifact-attestation/checksum process) before deciding whether to correct the script. Do not substitute an untrusted checksum source or silently disable verification.
+
+Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain out of scope. Requirements Draft 0.4 and DECISIONS.md remain unchanged. Overall status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation.
