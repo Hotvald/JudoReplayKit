@@ -2223,3 +2223,49 @@ C. Compare both with replay idle, active, overloaded and during reconnects. A re
 - MDN Using WebRTC Encoded Transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
 - MediaMTX v1.21.3 WebRTC session: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/session.go
 - MediaMTX v1.21.3 WebRTC inbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
+
+
+## 2026-11-15 — MediaMTX v1.21.3 gives each WebRTC reader an independent outbound queue
+
+**Scope:** Direct inspection of the exact v1.21.3 source for WebRTC sessions, stream fan-out and reader queues. No local services, streams or recordings were changed.
+
+### Verified source behaviour
+
+- Each MediaMTX WebRTC read session calls PathManager.AddReader(), creates its own internal WebRTC PeerConnection, registers a distinct stream.Reader, and adds that reader to the shared stream.
+- Stream.AddReader() starts a separate ring buffer for that reader and registers that reader's callbacks with the stream's media formats.
+- Each Reader owns its own ring buffer and worker goroutine. When the buffer cannot accept another callback, Reader.push() increments an outbound-discard counter instead of blocking the shared stream writer.
+- Stream.RemoveReader() unregisters only that reader's callbacks, removes that reader from the reader set, and closes its own queue.
+- Therefore a slow replay reader has a separate MediaMTX queue from the live reader. Queue overflow is recorded as discarded frames on that reader rather than being allowed to block the shared stream writer through that reader's queue.
+- This is a meaningful server-side isolation mechanism. It is not a guarantee that replay never loses frames: a slow replay reader can discard frames, and losing a reference frame may make following H.264 delta frames undecodable until the next usable keyframe.
+- The separate reader still adds packet fan-out and network egress. The server maintains a separate PeerConnection/RTP sender for the reader; it does not create a separate camera encoder. Browser-side CPU/GPU/memory competition also remains.
+
+### Consequences for JudoReplayKit
+
+- A second, continuously connected MediaMTX WebRTC reader for replay is now better supported by source evidence than a generic "second connection" assumption: MediaMTX explicitly maintains per-reader queues and drops only the slow reader's queued work when that queue is full.
+- This makes it a stronger candidate for protecting the visible live receiver from replay transform/copy work than putting the transform on the live receiver itself.
+- The replay application must monitor server reader-discard metrics/logs and its own sequence/timestamp continuity. Any gap that breaks the decode dependency chain must mark the replay cache as discontinuous and wait for a valid keyframe before claiming frame-accurate stepping.
+- The replay reader should not be connected only when Replay is pressed; it must be continuously primed, otherwise connection setup and GOP/keyframe wait would add delay.
+- The exact writeQueueSize setting and its effective frame capacity must be measured/configured carefully. A large queue can hide lag and increase memory/latency; a small queue can discard replay frames under bursts. Do not infer a time duration directly from queue length without measuring frame rate and callback behaviour.
+
+### Required PoC checks
+
+1. Establish one MediaMTX publisher and two independent WebRTC readers (live and replay).
+2. Deliberately stall the replay reader until its queue overflows; verify MediaMTX records replay-reader frame discards while live remains continuous and its latency does not increase.
+3. Verify that replay detects sequence/timestamp gaps, invalidates the affected decode dependency chain, and recovers only at a valid keyframe.
+4. Measure server CPU, memory, outbound bandwidth and queue occupancy with two cameras and two readers per camera.
+5. Test reconnect/removal of the replay reader while live remains connected; verify no publisher restart, live renegotiation or recording interruption.
+6. Measure the chosen queue size against real frame rates, bursts and expected replay duration; do not rely on default values without testing.
+
+### Assessment
+
+- MediaMTX's independent reader queues provide concrete source-level support for reader isolation and non-blocking overflow handling.
+- This strengthens the separate replay-reader PoC candidate. It does not prove end-to-end no-impact, because shared server resources, network egress and browser resource contention remain.
+- The separate replay-reader design is now the leading isolation experiment to compare against the single-transform design, but it is not selected or approved.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 WebRTC session: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/session.go
+- MediaMTX v1.21.3 stream fan-out: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+- MediaMTX v1.21.3 per-reader queue: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 WebRTC peer connection: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/peer_connection.go
