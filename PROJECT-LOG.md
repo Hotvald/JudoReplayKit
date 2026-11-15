@@ -4188,3 +4188,38 @@ This refines the isolation model: HTTP resource requests share the path muxer, b
 - MediaMTX v1.21.3 reader ring buffer, worker and discard counter: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
 - MediaMTX v1.21.3 stream AddReader/RemoveReader and queue-size assignment: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
 - MediaMTX v1.21.3 default WriteQueueSize: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+
+## 2026-11-15 — LL-HLS segment-size overflow can terminate and recreate the HLS muxer instance
+
+**Scope:** Exact error-path tracing across gohlslib v2.4.7 and MediaMTX v1.21.3. This is a source-derived failure mode; no runtime overflow test has been run.
+
+### Verified error propagation
+
+- gohlslib `muxerPart.writeSample()` returns an error when adding a sample would make the parent segment exceed `SegmentMaxSize`.
+- That error propagates through `fmp4WriteSample()` and `Muxer.WriteH264()` to MediaMTX's HLS `FromStream()` callback, which wraps it as `muxer error` and returns it from the stream-reader callback.
+- The MediaMTX `stream.Reader` worker exits when a callback returns an error. The HLS muxer instance then removes its reader, closes the gohlslib muxer and destroys the current rolling HLS segment/part resources.
+- For an automatically created HLS muxer, MediaMTX waits `recreateInstancePause` (10 seconds in v1.21.3) before attempting to create a replacement instance. This creates a potential HLS/replay history gap after a segment-size overflow. The recording path is a separate MediaMTX function and this source path does not show the recording being stopped by the HLS reader error.
+
+### Why it matters
+
+`hlsSegmentMaxSize` is a per-segment cap, not a graceful rolling-buffer trim. Since fMP4 segment duration can extend until the next qualifying random-access point, a long GOP combined with a high bitrate can cause a segment to exceed the size limit. The configured segment duration alone cannot prove the cap will never be reached.
+
+### Required PoC additions
+
+1. Use a controlled stream with a deliberately long GOP and bitrate sufficient to approach/exceed the configured segment size. Confirm exact error propagation, HLS muxer destruction/recreation timing, playlist continuity and whether recording continues uninterrupted.
+2. Verify that the configured maximum leaves adequate headroom for the largest expected GOP/bitrate combination, including short-term bitrate spikes.
+3. Test both automatic and on-demand HLS muxer lifecycles; distinguish the automatic 10-second recreation path from an on-demand reader/session failure.
+4. Ensure the UI detects an HLS muxer restart/history gap and does not report replay availability as continuous or complete. Confirm that the live and recording health indicators remain truthful.
+
+### Assessment
+
+This is a concrete HLS availability risk, not evidence that ordinary camera settings will hit the limit. It reinforces the need to measure maximum observed GOP bytes and actual segment duration on the camera matrix. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- gohlslib v2.4.7 parent-segment size check in part writer: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_part.go
+- gohlslib v2.4.7 error propagation through H.264 fMP4 segmenter: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- gohlslib v2.4.7 `WriteH264()` returns segmenter errors: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+- MediaMTX v1.21.3 HLS `FromStream()` callbacks return muxer errors: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- MediaMTX v1.21.3 HLS muxer-instance reader error handling and destruction: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+- MediaMTX v1.21.3 automatic HLS muxer recreation pause: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
