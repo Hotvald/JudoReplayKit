@@ -3898,3 +3898,25 @@ MP4Box.js can support a streaming extractor, but its defaults are not safe to ad
 - MP4Box.js v2.5.0 `ISOFile` constructor and `discardMdatData` default: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
 - MP4Box.js v2.5.0 `setExtractionOptions`, `appendBuffer`, `onSamples`, `start`, `flush` and sample-memory release: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
 - MP4Box.js v2.5.0 browser API and progressive parsing docs: https://github.com/gpac/mp4box.js/tree/v2.5.0
+## 2026-11-15 — Correction: MP4Box.js v2.5.0 Sample uses `is_sync`, not `is_rap`; sample release index is `sample.number`
+
+**Correction to earlier MP4Box/HLS notes:** The MP4Box.js v2.5.0 `Sample` type does not expose a property named `is_rap`. It exposes `is_sync`. The prior log entry's references to an MP4Box `is_rap` field were imprecise and should be read as the MP4 sample sync flag (`is_sync`).
+
+### Exact source facts
+
+- `entries/types.ts` defines `Sample` with `cts`, `dts`, `duration`, `data`, `is_sync`, `number`, `offset`, `size`, `timescale` and `track_id`; there is no `is_rap` property in that interface.
+- For fragmented MP4 samples, `src/isofile.ts` sets `is_sync` from the MP4 sample flags (`sample_flags` non-sync bit). `number` is assigned as the zero-based index `trak.samples.length` when the sample is appended.
+- `releaseSample(trak, sampleNum)` indexes `trak.samples[sampleNum]`. Therefore the callback's `sample.number` is the corresponding zero-based index for the fragmented sample, and is the candidate index to pass to `releaseSample` after its payload has been copied. Verify this against the actual pinned bundle and multi-part test before production use.
+- The `is_sync` flag still does not prove the NAL payload contains an IDR. The earlier strict IDR rule remains: inspect AVC NAL types before using a sample as a WebCodecs `key` chunk or ring eviction point.
+
+### Required correction to implementation notes
+
+- Use MP4Box `sample.is_sync` when logging MP4 sync-sample metadata.
+- Use `sample.number` to identify the parser's sample-list index for `releaseSample`, after validating the index against the current track sample list.
+- Keep separate fields for `mp4SyncFlag`, `hasIDRNAL`, and `hasRecoveryPointSEI`; never collapse these into one `isKeyframe` boolean.
+
+### Evidence
+
+- MP4Box.js v2.5.0 `Sample` type: https://github.com/gpac/mp4box.js/blob/v2.5.0/entries/types.ts
+- MP4Box.js v2.5.0 fragmented sample creation and `is_sync` assignment: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+- MP4Box.js v2.5.0 `releaseSample()` implementation: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
