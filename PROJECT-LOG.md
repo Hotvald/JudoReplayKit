@@ -2976,3 +2976,29 @@ Compressed history plus on-demand pre-roll decode is now a serious alternative t
 
 - W3C WebCodecs VideoDecoder lifecycle and flush/reset algorithms: https://www.w3.org/TR/webcodecs/
 - MDN WebCodecs usage guide, bounded decode batches and decoder recovery: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+## 2026-11-15 — PRISM Live Studio mobile keyframe interval as a replay pre-roll control
+
+**Scope:** Review of official PRISM Live Studio mobile documentation. This is relevant to the mobile RTMP source path; it does not establish the current camera's actual settings or prove the transmitted GOP interval. No user device or stream was changed.
+
+### Verified official documentation
+
+- PRISM's official mobile guide says the mobile app exposes four video-quality factors: resolution, bitrate, frame rate and keyframe interval. It describes keyframe interval as how frequently keyframes are inserted and says a typical setting is every 2 seconds.
+- PRISM's official mobile FAQ says users can change encoding settings before going live and recommends a keyframe interval of 1–2 seconds for normal live broadcasting. It also notes that encoding settings cannot be changed once the broadcast has started.
+- PRISM's Adaptive Bitrate Publish (ABP) guide says ABP automatically adjusts video quality based on network conditions and identifies resolution, bitrate, frame rate and keyframe interval as the factors determining video quality. The guide recommends keeping ABP enabled for inexperienced streamers.
+
+### Consequences for JudoReplayKit
+
+1. If PRISM Live Studio is the actual mobile source, a 1-second keyframe interval is a plausible PoC variable for reducing the maximum compressed-ring pre-roll distance compared with the typical 2-second setting. It is not a universal production recommendation and may increase bitrate/stream load.
+2. Test both 1-second and 2-second configured intervals with the actual phone, Wi-Fi/network and MediaMTX v1.21.3 path. Measure actual IDR-to-IDR intervals in the received H.264 bitstream; do not assume the app's configured interval is the transmitted interval.
+3. Run separate cases with ABP enabled and disabled/manual settings if the app version permits. Since ABP adapts video quality and keyframe interval is one of the documented quality factors, the effective GOP may vary under changing network conditions.
+4. Record the resulting bitrate, IDR cadence, image quality, dropped frames, phone thermal load, MediaMTX/browser decode behaviour and replay-button-to-first-frame latency. A shorter GOP is only useful if it does not destabilize the live stream or degrade the image.
+5. This tuning is a source-side lever for the compressed-ring/pre-roll PoC; it does not replace a continuously warm replay reader or guarantee immediate display by itself.
+
+### Assessment
+
+PRISM's official documentation confirms that mobile keyframe interval is configurable and typically 1–2 seconds. This makes short-GOP pre-roll decoding a more realistic test candidate if PRISM is the deployed source. Actual GOP cadence must be measured, particularly with ABP enabled. No user action is required at this research stage, and no source settings have been changed. No architecture is selected; overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- PRISM Live Studio mobile — Setting Adaptive Bitrate: https://guide.prismlive.com/mobile/guides/streaming/configuration/setting-adaptive-bitrate
+- PRISM Live Studio official FAQ — mobile encoding settings and 1–2-second keyframe interval: https://prismlive.com/en_us/faq/faq.html
