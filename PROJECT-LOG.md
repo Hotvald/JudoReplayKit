@@ -4420,3 +4420,38 @@ This is a concrete architectural explanation for why the current archive-based i
 - Archived Rev.8 MediaMTX config selects hlsVariant: mpegts and leaves hlsDirectory unset: 01_SUPPORTING_FILES.txt, app/mediamtx-runtime.yml.
 - MediaMTX v1.21.3 Playback GET handler: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/on_get.go
 - gohlslib v2.4.7 fMP4 part storage implementation: https://github.com/bluenviron/gohlslib/tree/v2.4.7/pkg/storage
+
+## 2026-11-15 — Rev.8 bookmark recording-time calibration can drift while the description prompt is open
+
+**Scope:** Exact review of the archived Rev.8 app.js bookmark path. This is a source-derived timing defect; it has not yet been reproduced in a live camera test.
+
+### Verified code sequence
+
+- The bookmark click handler captures clickTime = Date.now() before showing the blocking prompt() for the bookmark description.
+- After the user dismisses the prompt and the bookmark is saved, the code calls fetchLatestRecordingEnd().
+- fetchLatestRecordingEnd() independently samples a new Date.now(), then asks the archive list for spans from that later time minus 30 seconds through that later time plus 2 seconds. It returns the latest span end from that later query.
+- The result is stored as lastSpanEnd, and recordingLag is calculated as the original clickTime minus that later latestEnd.
+- openBookmarkReplay() uses lastSpanEnd as its replay target whenever it exists, rather than the original clickTime adjusted by a stable recording-clock calibration.
+
+### Failure mode
+
+Because prompt() blocks the page while the user types, the archive query is performed after the original bookmark click. If the user spends several seconds entering a description, the latest recording end can advance by those seconds. The stored lastSpanEnd can therefore refer to a later moment than the actual button click, and the bookmark replay target can drift forward by approximately the time spent in the prompt (plus recording/query timing). A negative recordingLag is possible and should not be silently treated as a normal positive recording delay.
+
+This makes bookmark placement dependent on how quickly the official types the description, which is undesirable for a referee event marker.
+
+### Required correction direction
+
+1. Preserve the original clickTime as the immutable event timestamp.
+2. Calibrate the archive time against that clickTime, not against a fresh Date.now() taken after the prompt. Query a bounded interval around clickTime and select the closest valid recording timestamp using an explicit tolerance.
+3. Keep the click timestamp and recording timestamp as separate fields. Preserve signed lag and flag implausible values rather than shifting the bookmark silently.
+4. If calibration is unavailable, keep the exact clickTime and mark the recording position as approximate; do not substitute the newest later archive time.
+5. Add tests with prompt delays of 0, 5, 15 and 30 seconds and with simulated recorder lag. The replay target should remain tied to the original click within the defined tolerance.
+6. The same handler currently expands the bookmark drawer immediately after saving. This conflicts with the recorded product decision that adding a bookmark must not automatically open the drawer. Keep that known UI defect separate from the timestamp correction.
+
+### Evidence
+
+- Archived Rev.8 app.js captures clickTime before prompt(): 02_CURRENT_APP_JS.txt, line 1186.
+- Archived Rev.8 app.js fetchLatestRecordingEnd() samples a fresh Date.now() and queries a rolling 30-second window: 02_CURRENT_APP_JS.txt, line 1142.
+- Archived Rev.8 app.js saves the later latestEnd as lastSpanEnd and computes recordingLag against the earlier clickTime: 02_CURRENT_APP_JS.txt, line 1202.
+- Archived Rev.8 app.js opens the drawer after bookmark creation: 02_CURRENT_APP_JS.txt, line 1199.
+- Archived Rev.8 app.js uses lastSpanEnd as the bookmark replay target: 02_CURRENT_APP_JS.txt, line 776.
