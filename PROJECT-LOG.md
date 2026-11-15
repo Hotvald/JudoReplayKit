@@ -4394,3 +4394,29 @@ This is a concrete architectural explanation for why the current archive-based i
 - MediaMTX v1.21.3 Playback GET sets Accept-Ranges: none and calls seekAndMux(): https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/on_get.go
 - MediaMTX v1.21.3 fMP4 playback parser walks sample entries and invokes the payload reader: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/segment_fmp4.go
 - MediaMTX v1.21.3 fMP4 playback muxer reads sample payloads before dropping pre-start samples and retains the GOP: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/muxer_fmp4.go
+
+## 2026-11-15 — Rev.8 route clarification and LL-HLS disk-race applicability
+
+**Scope:** Cross-check of the archived Rev.8 app.js, Caddyfile and MediaMTX test configuration against the earlier playback-route and LL-HLS storage findings.
+
+### Playback URL mismatch candidate — closed for the archived Rev.8 app.js
+
+- The earlier playback-list response was observed to include a generated URL using the unprefixed /get path, while Caddy's configured playback reverse-proxy route is /playback/* and strips the /playback prefix before forwarding to MediaMTX.
+- The archived Rev.8 app.js does not consume the generated URL field from the list response. It constructs its own URL in playbackUrl(), using /playback/get with path, start, duration and format=fmp4.
+- Caddy's /playback/* route strips /playback and forwards /get to localhost:9995, which is the correct MediaMTX Playback GET route.
+- Therefore, the list response's unprefixed generated URL is **not by itself the cause** of the archived Rev.8 app's black replay window. Keep the generated URL mismatch as an API-response observation, but do not change Caddy routing on that basis. The dominant source-level issue found in this review is the whole-span request and subsequent seek described in the preceding entry.
+
+### LL-HLS disk-backed part race — not active in the archived Rev.8 test configuration
+
+- The archived Rev.8 MediaMTX test configuration sets hlsVariant to mpegts and does not set hlsDirectory.
+- The disk-backed part finalization race recorded above is specific to the gohlslib fMP4/Low-Latency HLS part path when disk-backed HLS storage is selected. It is not exercised by the archived Rev.8 MPEG-TS HLS configuration.
+- The finding remains relevant only if a future configuration switches to Low-Latency HLS and supplies a non-empty HLS directory. It must not be treated as a current Rev.8 defect or used as a reason to change the existing test HLS variant.
+
+### Evidence
+
+- Archived Rev.8 app.js, playbackUrl() at line 276 constructs /playback/get: 02_CURRENT_APP_JS.txt.
+- Archived Rev.8 app.js, loadSpan() at line 504 uses the constructed URL: 02_CURRENT_APP_JS.txt.
+- Archived Rev.8 Caddyfile routes /playback/*, strips the prefix and proxies to localhost:9995: 01_SUPPORTING_FILES.txt, app/Caddyfile.
+- Archived Rev.8 MediaMTX config selects hlsVariant: mpegts and leaves hlsDirectory unset: 01_SUPPORTING_FILES.txt, app/mediamtx-runtime.yml.
+- MediaMTX v1.21.3 Playback GET handler: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/playback/on_get.go
+- gohlslib v2.4.7 fMP4 part storage implementation: https://github.com/bluenviron/gohlslib/tree/v2.4.7/pkg/storage
