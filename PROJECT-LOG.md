@@ -4075,3 +4075,41 @@ This adds concrete startup, variable-GOP, codec-change and source-on-demand gate
 - mediacommon H.264 recovery-point SEI requires `recovery_frame_cnt == 0`: https://github.com/bluenviron/mediacommon/blob/v2.9.7/pkg/codecs/h264/sei.go
 - MediaMTX v1.21.3 automatic HLS muxer creation and `sourceOnDemand` condition: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
 - MediaMTX v1.21.3 HLS defaults including 50 MiB segment max size: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+
+## 2026-11-15 — MP4Box.js v2.5.0 long-running extraction retains sample metadata
+
+**Scope:** Exact source inspection of the tagged MP4Box.js v2.5.0 implementation. This is a source-level memory-lifecycle finding; no browser PoC or measured leak has been run.
+
+### Verified parser memory behaviour
+
+- `setExtractionOptions()` configures sample extraction, and `onSamples` transfers batches to the application. The extraction loop advances `trak.nextSample` and appends each extracted sample to the track's `trak.samples` array. The callback's `extractTrak.samples` batch array is cleared after callback, but the underlying per-track sample metadata array is not.
+- `releaseUsedSamples(trackId, sampleNum)` loops over already-used samples and calls `releaseSample()`. `releaseSample()` subtracts the payload size from `samplesDataSize`, sets `sample.data = undefined`, resets `sample.alreadyRead`, and returns the released byte count. It does not remove the sample object from `trak.samples` or compact the array.
+- `getAllocatedSampleDataSize()` reports `samplesDataSize`, which is the retained sample-payload byte count. It does not report the memory used by the growing `trak.samples` metadata array, sample objects, parsed box objects, or JavaScript object overhead.
+- `stop()` only disables sample processing; `start()` re-enables it. `flush()` processes remaining samples and cleans stream buffers, but it is not a parser reset. The inspected `ISOFile` v2.5.0 class exposes no reset method that clears the accumulated track sample list.
+
+### Consequence for a continuous tournament stream
+
+A single MP4Box parser kept alive for hours can retain an ever-growing sample metadata history even when the application correctly calls `releaseUsedSamples()` and the reported sample-payload memory returns near zero. Therefore `getAllocatedSampleDataSize()` alone is not a sufficient long-duration memory metric and must not be treated as proof of bounded parser memory.
+
+### Candidate containment strategies — not selected
+
+1. **Bounded parser epochs:** create a fresh parser at controlled media boundaries (for example, per completed segment or a small group of parts), feed the matching init segment and media fragments, extract/copy samples, release payloads and dispose of the parser. Measure repeated init parsing, allocations, latency and timestamp continuity.
+2. **Custom bounded sample-index lifecycle:** only if the library's internal invariants permit it, retire old sample metadata while preserving decode-order indices, fragment sequence state, timestamps and parser offsets. This is invasive and must not be attempted without a dedicated test against the pinned release.
+3. **Use MP4Box only for bounded historical clip parsing:** keep a separate small hot buffer/decoder path for immediate replay and instantiate short-lived parsers for archive/segment reads.
+
+### Required PoC additions
+
+- Run at least a multi-hour synthetic continuous fMP4 feed at the expected camera frame rate. After every extraction callback, call `releaseUsedSamples()` correctly and record `getAllocatedSampleDataSize()`, `trak.samples.length`, parser/worker JS heap, process RAM and time-to-callback.
+- Verify that sample payload bytes are released while sample metadata count continues to increase; quantify actual memory slope rather than assume a leak size.
+- Compare one long-lived parser with bounded parser epochs. Verify no missing/duplicate samples at epoch boundaries, correct `tfdt`/DTS/CTS continuity, decoder start from a true IDR, and no delay in the newest replay window.
+- Ensure the memory telemetry separately reports sample payload bytes, parser sample count, worker heap and decoded VideoFrame resources.
+
+### Assessment
+
+MP4Box.js remains plausible as a short-lived fMP4 demuxer, but a single unbounded parser instance is not yet acceptable for a tournament-long ingest worker. This is a new memory-lifecycle gate, not a confirmed runtime failure. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MP4Box.js v2.5.0 `ISOFile` extraction loop, `releaseUsedSamples()`, `releaseSample()`, `start()`, `stop()` and `flush()`: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+- MP4Box.js v2.5.0 package release/version: https://github.com/gpac/mp4box.js/blob/v2.5.0/package.json
+- MP4Box.js memory-management guide (payload release behaviour): https://github.com/gpac/mp4box.js/wiki/Memory-managment-in-MP4Box.js
