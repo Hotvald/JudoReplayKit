@@ -2924,3 +2924,55 @@ An all-intra derivative cache is technically feasible and could make arbitrary f
 - W3C WebCodecs VideoEncoder key-frame requirement: https://www.w3.org/TR/webcodecs/
 - W3C AVC (H.264) WebCodecs Registration: https://www.w3.org/TR/webcodecs-avc-codec-registration/
 - MDN WebCodecs usage guide: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+## 2026-11-15 — Compressed-ring seek pre-roll and reusable VideoDecoder lifecycle
+
+**Scope:** Review of current WebCodecs VideoDecoder `configure()`, `decode()`, `flush()` and `reset()` semantics. This adds a low-memory seek candidate; no runtime PoC, local changes, or architecture decision.
+
+### Verified decoder lifecycle behaviour
+
+- `VideoDecoder.decode()` enqueues work asynchronously. `decodeQueueSize` counts pending decode requests and decreases as the underlying codec is ready to accept work; it is not a complete count of all internal decoder work or proof that all outputs have been delivered.
+- The WebCodecs specification says `flush()` completes all control messages in the decoder control queue and emits all pending outputs. It also sets the internal `key chunk required` flag to true. The decoder remains in the `configured` state; the active configuration is not cleared by `flush()`.
+- After `flush()` resolves, the next chunk submitted to `decode()` must be a key chunk. This makes `flush()` a possible boundary between seek operations: finish the previous decode, then start the next seek from a valid keyframe without reconfiguring the decoder.
+- `reset()` is materially different: it immediately resets state, including configuration, control messages and pending callbacks; the decoder state becomes `unconfigured`. A subsequent seek requires `configure()` again before decoding.
+- The `VideoDecoder` output callback is invoked for decoded outputs in presentation order. `flush()` is useful when a caller needs a clear completion boundary, but should not be used after every input chunk. It forces a key chunk boundary and can add latency if called on the critical replay-button path.
+- MDN notes that a decoder may not return its last few frames until `flush()` is called, and recommends bounded batches rather than sending thousands of chunks at once. Decoder errors close the decoder permanently; a new decoder instance is required, starting from a keyframe.
+
+### Low-memory seek candidate
+
+Instead of retaining 15 seconds of decoded frames, keep:
+
+- A continuously warm, time- and byte-bounded compressed H.264 access-unit ring per camera.
+- A configured WebCodecs decoder available for replay seeks.
+- A very short decoded hot window or only the selected/nearby frames needed for immediate display and frame stepping.
+- A worker-owned OffscreenCanvas for the replay overlay.
+
+On a replay request, locate the nearest preceding valid IDR/key access unit, then feed the complete decode-ordered access-unit sequence up to and beyond the requested frame. Discard/close pre-roll VideoFrames that are earlier than the target, preserve the target and a short following window, and continue playback from the target. After the seek sequence is complete, call `flush()` in the background or at the natural end of the requested sequence so the decoder is ready for a new keyframe-based seek while remaining configured.
+
+### Important qualifications
+
+- This design is not automatically instant. It must decode every access unit from the preceding random-access point to the requested timestamp. The delay depends on GOP/IDR spacing, decoder startup, decode throughput, output-surface availability, and the actual bitstream.
+- Do not use `decodeQueueSize === 0` alone to declare that all outputs are complete. Use a measured output-completion condition or `flush()` at a safe boundary.
+- A fresh IDR may reset codec reference state, but repeated non-monotonic timestamp/seek use on one configured decoder is not guaranteed to behave identically across implementations. Test repeated seeks, timestamps, output order and decoder errors. If necessary, keep a small decoder pool or create a fresh decoder outside the critical path.
+- Do not call `reset()` on the replay-button path unless measurements show it is fast enough; it discards configuration and pending work. Prefer a preconfigured decoder plus a clean keyframe/flush boundary where the browser behaves correctly.
+- If a seek is interrupted, stale output callbacks must be tagged with a seek-generation ID so frames from an earlier request cannot be displayed as part of a later request.
+- The H.264 Annex B keyframe requirements still apply: the starting key chunk must be a true IDR with all required SPS/PPS sets. The MediaMTX v1.21.3 single-SPS/PPS limitation and multi-PPS concern remain hard compatibility gates.
+
+### Required comparison in the PoC
+
+Compare at least:
+
+1. Full 15-second decoded cache.
+2. Compressed H.264 ring plus a 1-second decoded hot window.
+3. Compressed H.264 ring plus on-demand pre-roll decode from preceding IDR using a preconfigured reusable decoder.
+4. Same as 3 but with a fresh decoder created/configured on demand, to quantify decoder setup cost.
+
+For random seek positions across the 5/15/30-second history, record preceding-IDR distance, number of pre-roll access units, replay-button-to-first-displayed-frame, time to target frame, exact adjacent frame-step, decodeQueueSize, CPU/GPU, memory, output-surface stalls, errors and recording/live continuity. Repeat on Windows and Linux with one and two cameras, hardware and software decode, and `optimizeForLatency` on/off.
+
+### Assessment
+
+Compressed history plus on-demand pre-roll decode is now a serious alternative to a full-horizon decoded cache. It can reduce memory dramatically if actual GOPs are short enough and the decoder can process the pre-roll substantially faster than real time. `flush()` offers a standards-defined way to finish a seek and require a new keyframe while keeping the decoder configured, potentially avoiding repeated configure cost. Neither the latency nor reuse behaviour is proven on target browsers; this must be measured. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs VideoDecoder lifecycle and flush/reset algorithms: https://www.w3.org/TR/webcodecs/
+- MDN WebCodecs usage guide, bounded decode batches and decoder recovery: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
