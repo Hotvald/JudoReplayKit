@@ -2170,3 +2170,56 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - MDN Using the WebCodecs API: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
 - MDN VideoFrame.close(): https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/close
 - MDN RTCEncodedVideoFrame.getMetadata(): https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/getMetadata
+
+
+## 2026-11-15 — Receiver-side WebRTC transform is on the live decoder path; isolation trade-off
+
+**Scope:** Direct review of the current W3C WebRTC Encoded Transform specification and MDN usage guidance. Read-only research; no local changes or running media services.
+
+### Verified pipeline placement
+
+- The W3C specification places a receiver-side encoded transform between the RTP depacketizer and the browser's normal media decoder.
+- The depacketizer's encoded frame is passed through the transform algorithm and then to the associated decoder. Therefore, if JudoReplayKit adds a receiver transform to the same PeerConnection used for visible live video, its transform code executes on the live receive/decode path.
+- The W3C specification explicitly states that stream backpressure is disabled for WebRTC encoded transforms. This is intentional because WebRTC favours low latency over reliable buffering. Applications must not assume a slow replay-copy operation will safely backpressure the producer; overload may instead result in queued work, dropped frames or latency depending on implementation behaviour.
+- The receiver transform can be attached in the track event before the first full encoded frame, but it still becomes part of the path that feeds the browser's ordinary decoder.
+
+### Architectural consequence
+
+A single PeerConnection with a receiver transform is efficient in network terms, but it does not provide strict live-path isolation: the transform must inspect/copy the encoded frame before passing it to the live decoder. A bounded, fast, synchronous copy may prove harmless, but that is a measured property, not a guarantee.
+
+A separate WebRTC PeerConnection/reader dedicated to replay is an alternative:
+- Keep the visible live PeerConnection free of application transform code.
+- Attach the receiver transform and replay ring only to the replay PeerConnection.
+- This increases MediaMTX reader count and network egress, and may add another browser decode path depending on how the receiver track is handled.
+- It does not eliminate competition for browser CPU, GPU, memory or network bandwidth. It only separates the live receive/decode pipeline from replay-specific JavaScript work.
+- The replay reader must remain continuously connected and maintain its own bounded decodable history; connecting only after Replay is pressed would reintroduce keyframe/GOP wait time.
+- MediaMTX's separate-reader model and periodic publisher PLI are relevant, but do not guarantee replay readiness or resource isolation.
+
+### Required comparison PoC
+
+A. Single receiver:
+1. One WebRTC PeerConnection for visible live video.
+2. Receiver transform copies access units into a bounded replay ring and immediately passes the original encoded frame unchanged to the normal decoder.
+3. Measure transform execution time, copy time, live glass-to-glass latency, dropped frames, jitter-buffer behaviour and CPU/GPU under two cameras.
+
+B. Separate replay receiver:
+1. One unmodified PeerConnection for visible live video.
+2. A second PeerConnection per camera for replay buffering, with receiver transform and independent replay decoder/cache.
+3. Measure added server/network load, whether the hidden replay receiver triggers a second native decode, total CPU/GPU/memory, and live latency.
+4. Pause, step, reset and overload replay while verifying that the live PeerConnection and visible stream remain unaffected.
+
+C. Compare both with replay idle, active, overloaded and during reconnects. A result passes only if live latency/continuity remain within the test's pre-agreed tolerance and recording is unchanged.
+
+### Assessment
+
+- The single-transform design cannot be described as "no impact on live" before measurement because it inserts application work directly into the live receive pipeline.
+- The separate replay receiver is a more credible isolation candidate for the user's highest-priority requirement, at the cost of extra bandwidth and decode/resource use.
+- Both designs remain PoC candidates. Do not select one before measuring two-camera operation on the target Windows/Linux PC.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC Encoded Transform, pipeline placement and disabled backpressure: https://www.w3.org/TR/webrtc-encoded-transform/
+- MDN Using WebRTC Encoded Transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
+- MediaMTX v1.21.3 WebRTC session: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/webrtc/session.go
+- MediaMTX v1.21.3 WebRTC inbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
