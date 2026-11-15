@@ -3787,3 +3787,41 @@ The HLS/fMP4 → MP4Box.js → WebCodecs candidate still looks promising, but it
 
 - MediaMTX v1.21.3 per-path HLS muxer map and reuse: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
 - MediaMTX v1.21.3 one HLS muxer instance/one stream.Reader and shared HTTP handler: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+## 2026-11-15 — LL-HLS history retrieval: completed segments, live parts, retention and overlap rules
+
+**Scope:** Exact source inspection of gohlslib v2.4.7 playlist generation, URI registration, segment eviction and MediaMTX v1.21.3 HLS request handling. Source-level finding; no runtime PoC.
+
+### Verified behaviour
+
+- In Low-Latency HLS, gohlslib v2.4.7 writes the `EXT-X-MAP` init URI into every full and delta playlist. A delta update skips old segment entries but preserves the map.
+- The full media playlist lists the retained completed fMP4 segments. For the most recent two completed segments, it also lists their `EXT-X-PART` URIs. The current open segment lists its completed parts and a preload hint for the next part.
+- The segment media URI is `*_seg<N>.mp4`; part URIs are `*_part<N>.mp4`. Part IDs are a separate monotonically increasing counter, not the parent segment ID plus part index.
+- Each finalized part is stored and registered as its own HTTP resource. The completed segment is separately finalized, stored and registered as another HTTP resource. A completed segment contains the same stream interval as its parts; the app must not append both copies to the replay sample ring.
+- On segment rotation, gohlslib appends the completed segment, registers its resource, then evicts the oldest retained segment when `len(segments) > SegmentCount`. Eviction removes the old segment URI and all part URIs belonging to that segment. Therefore a configured SegmentCount is a bounded rolling media window, not permanent archive storage.
+- MediaMTX v1.21.3 routes HLS requests through gohlslib's muxer handler. Non-CDN responses are wrapped in no-cache behaviour. Low-latency playlist responses use `Cache-Control: no-cache`.
+- Blocking playlist reload (`_HLS_msn` / `_HLS_part`) waits on a condition variable until the requested part exists, then returns the updated playlist. Requests outside the current media-sequence/advance-part range receive HTTP 400. A request with `_HLS_part` but no `_HLS_msn` is rejected.
+- LL-HLS requires `SegmentCount >= 7` in gohlslib v2.4.7. The default is 7. The first LL-HLS completed segment also causes seven initial GAP placeholders to be inserted; those are not actual decodable media and must not be counted as valid replay history.
+- Segment minimum duration is a target, not a fixed exact duration: gohlslib adjusts segmentation to include at least one IDR/random-access point. Actual retention time must be calculated from playlist EXTINF and segment timestamps, not simply `SegmentCount * 1 second`.
+- The fMP4 segment is independently stored with its parts. The full segment can be fetched for older history while the most recent part resources are used for the live edge. A worker can use full segments for backfill and only ingest new parts for the currently open segment, avoiding duplicate sample insertion.
+
+### Recommended worker retrieval algorithm
+
+1. Fetch a non-delta full playlist (do not request `_HLS_skip`) and the current `EXT-X-MAP`. Parse `EXT-X-DISCONTINUITY-SEQUENCE`, `EXT-X-MEDIA-SEQUENCE`, `EXTINF`, `EXT-X-PROGRAM-DATE-TIME`, segment URIs, parts and gap markers.
+2. At worker startup, use completed segment URIs for the retained history. Ignore `EXT-X-GAP` placeholders. Verify actual playlist duration and IDR coverage; do not assume SegmentCount equals seconds.
+3. For the open/current segment, fetch each completed `EXT-X-PART` once using its unique URI/part ID. Use `_HLS_msn` + `_HLS_part` blocking reload to wait for new parts rather than polling.
+4. When an open segment becomes complete, mark all its parts as superseded for ingest purposes and switch to the completed segment URI only for validation/backfill, not for appending the same media samples a second time.
+5. Identify media by camera, discontinuity sequence, media sequence, URI and part index; also deduplicate samples by codec epoch plus track ID/DTS/CTS. Do not deduplicate only by timestamps because PTS can repeat/reset at discontinuities.
+6. If a part/segment request returns 404/400, distinguish an expired URI, a stale preload hint, an out-of-range blocking reload and a genuine stream failure. Re-fetch a fresh full playlist and reconcile before declaring a camera fault.
+7. Calculate the replay window from actual segment/part durations and timestamps. Require more than the requested 30 seconds plus safety margin so that IDR alignment, long GOPs, segment rotation and playlist update delays do not reduce usable history.
+
+### Implications
+
+This confirms a clean hybrid retrieval strategy for the LL-HLS → MP4Box.js → WebCodecs candidate: completed fMP4 segments provide compressed backfill; LL-HLS parts provide fresh samples near the live edge. The app must carefully avoid duplicate samples at the part-to-segment transition, ignore initial GAP placeholders, and size retention from measured durations rather than nominal segment count. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- gohlslib v2.4.7 LL-HLS playlist, map, retained segment and recent-part generation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 part URI and blocking preload resource registration: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 completed segment registration and bounded eviction: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 segment/part URI naming and LL-HLS SegmentCount minimum: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+- MediaMTX v1.21.3 HLS request routing and no-cache response handling: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
