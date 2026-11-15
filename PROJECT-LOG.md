@@ -3920,3 +3920,48 @@ MP4Box.js can support a streaming extractor, but its defaults are not safe to ad
 - MP4Box.js v2.5.0 `Sample` type: https://github.com/gpac/mp4box.js/blob/v2.5.0/entries/types.ts
 - MP4Box.js v2.5.0 fragmented sample creation and `is_sync` assignment: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
 - MP4Box.js v2.5.0 `releaseSample()` implementation: https://github.com/gpac/mp4box.js/blob/v2.5.0/src/isofile.ts
+## 2026-11-15 — Hardware decode feasibility for WebCodecs on Windows/Linux
+
+**Scope:** Review of W3C WebCodecs Working Draft dated 2026-11-02, MDN VideoDecoder/MediaCapabilities documentation, current Chromium VA-API documentation and Microsoft Edge H.264 decoder diagnostics. No device-specific test was run.
+
+### WebCodecs API findings
+
+- `VideoDecoderConfig.hardwareAcceleration` accepts `no-preference`, `prefer-hardware` and `prefer-software`. The W3C specification explicitly defines the latter two as hints; the browser may ignore them. A successful `VideoDecoder.isConfigSupported()` response confirms that the configuration is accepted, not that the selected decoder is hardware accelerated.
+- The W3C draft recommends `no-preference` for most applications. `prefer-hardware` can restrict supported codec/profile combinations, hardware decoding may have higher startup latency, and hardware decoders may be less robust to malformed/non-conforming streams. Hardware acceleration generally reduces CPU load and can improve sustained throughput, but is not automatically faster for low-resolution streams.
+- `optimizeForLatency: true` is a separate hint to reduce how many encoded chunks are needed before a decoded `VideoFrame` is output. It should be tested independently of `hardwareAcceleration`; neither hint is a guarantee.
+- `VideoDecoder.isConfigSupported()` is available in Dedicated Workers in supporting browsers and returns `supported` plus the recognized config. It does not expose a definitive selected backend or hardware/software flag.
+- `MediaCapabilities.decodingInfo()` returns `supported`, `smooth` and `powerEfficient` for a media-decoding configuration, but this is a browser media capability estimate for `file`, `media-source` or `webrtc` playback. It is not proof that a separately instantiated WebCodecs `VideoDecoder` uses hardware acceleration. The API may initially report smooth/power-efficient until device statistics exist.
+
+### Platform implications
+
+- Windows: Microsoft Edge documents a layered H.264 playback path using the Windows Media Foundation H.264 decoder with DXVA hardware acceleration, an alternative D3D11 video decode accelerator on some configurations, and a Chromium software decoder fallback. Edge's `edge://media-internals` can identify `D3D11VideoDecoder` or `MediaFoundationVideoDecoder` for a playing HTML video. This is useful platform evidence, but it does not prove that a WebCodecs `VideoDecoder` instance chooses the same backend.
+- Linux: current Chromium documentation describes VA-API hardware decode as unsupported for ordinary Linux Chromium builds, with developer/test paths that may work on selected configurations and require suitable drivers/flags. Do not make Linux WebCodecs hardware acceleration a baseline assumption. Intel/AMD VA-API may be testable; NVIDIA support is specifically cautioned in Chromium docs.
+- Therefore Windows hardware decode is a credible expectation to test on supported GPUs/drivers, while Linux hardware decode remains more variable and may require browser-specific setup. The application must remain correct with software decode on both platforms.
+
+### VideoFrame memory and resource handling
+
+- W3C defines `VideoFrame` as holding a reference to an underlying media resource, which may be backed by hardware surfaces. Transferring a VideoFrame between realms moves the resource reference and closes the source object; this can avoid copying the underlying media resource.
+- This does not mean retained frames are free. A long-lived decoded-frame cache can pin hardware decoder surfaces and exhaust a decoder's surface pool or GPU memory. Always bound the active frame count and close evicted frames. Transfer frames to the UI worker only when ownership is transferred; avoid cloning unless necessary.
+- If the UI must preserve many frames for exact stepping, a possible compromise is a short decoded hot window plus the compressed H.264 sample ring. Hardware decode can reduce CPU cost but cannot eliminate the memory cost of retaining many decoded frames.
+
+### Required hardware-decode PoC matrix
+
+1. For each real camera `avcC`/codec string and coded resolution, call `VideoDecoder.isConfigSupported()` with `no-preference`, `prefer-hardware` and `prefer-software`; record returned `supported` and recognized config. Do not infer the backend from this response.
+2. Test `optimizeForLatency` true/false independently; measure configure/startup latency, keyframe-to-first-frame, steady decode throughput and frame ordering.
+3. Use the same HLS/MP4Box sample stream on Windows 11 Edge and Chrome, and at least one supported Linux distribution with Chrome/Chromium and Firefox. Record browser/GPU/driver versions and H.264 profile/level.
+4. On Edge/Chrome, inspect browser media diagnostics (`edge://media-internals`, `chrome://media-internals`, `edge://gpu`, `chrome://gpu`) where applicable. Treat these as corroboration for HTML playback, not definitive WebCodecs backend telemetry. Measure CPU/GPU engine utilization and power/memory during the actual WebCodecs replay worker.
+5. Compare `no-preference` versus `prefer-hardware` using two cameras, two decoders, replay pause/step and a bounded VideoFrame cache. Track active VideoFrame count, cache bytes, decoder queue size, GPU memory, system RAM, CPU, first-frame latency, sustained decode rate and dropped/error frames.
+6. Run with the hardware path unavailable/disabled to prove software fallback. The app must not fail or change bookmark/frame identity if hardware acceleration is absent.
+
+### Assessment
+
+Hardware decoding is worth testing and may materially reduce CPU pressure, especially on Windows, but it is not a safe architectural dependency. The WebCodecs API provides only a preference hint and a configuration-support check, not a guaranteed backend selector. Linux Chromium VA-API is particularly non-uniform. Keep `no-preference` as the baseline, test `prefer-hardware` as an optimization, and retain a bounded software-decode fallback. Do not count GPU memory as free storage for retained frames. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs Working Draft (2026-11-02), hardware acceleration and latency hints: https://www.w3.org/TR/2026/WD-webcodecs-20261102/
+- W3C WebCodecs VideoFrame resource reference and transferable ownership: https://www.w3.org/TR/2026/WD-webcodecs-20261102/
+- MDN VideoDecoder.isConfigSupported: https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder/isConfigSupported_static
+- MDN MediaCapabilities.decodingInfo and powerEfficient/smooth: https://developer.mozilla.org/en-US/docs/Web/API/MediaCapabilities/decodingInfo
+- Chromium VA-API documentation: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
+- Microsoft Edge H.264 decoder paths and diagnostics: https://learn.microsoft.com/en-us/troubleshoot/microsoft-edge/development/video-playback-issues
