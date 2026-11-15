@@ -2729,3 +2729,52 @@ WebGPU offers a potentially efficient display path and a persistent GPUTexture c
 - W3C WebGPU limits and texture creation validation: https://www.w3.org/TR/webgpu/#limits
 - MDN GPUSupportedLimits (`maxTextureArrayLayers` default 256): https://developer.mozilla.org/en-US/docs/Web/API/GPUSupportedLimits
 - MDN GPUDevice.createTexture() validation: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createTexture
+## 2026-11-15 — Worker-owned replay ring, SharedArrayBuffer requirements and asynchronous VideoFrame copies
+
+**Scope:** Review of current WebCodecs, Web Workers, transferable ArrayBuffer and cross-origin isolation documentation. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified findings
+
+- `VideoDecoder` is exposed in Window and DedicatedWorker contexts in the current WebCodecs specification. This permits a replay decoder and its output handling to live in a dedicated worker rather than the UI/main thread.
+- `OffscreenCanvas` is broadly available and can be transferred to a worker, allowing rendering work to be moved off the main thread. Chrome's WebCodecs guidance recommends worker-based processing because per-frame callbacks can otherwise make the main thread less responsive.
+- `ArrayBuffer` is transferable between workers. Transfer moves ownership of the memory resource and detaches the source-side buffer; it is not a second full pixel copy. This is useful for handing completed buffers between worker-owned stages, but a single owner for a ring is simpler than transferring each slot repeatedly.
+- The current WebCodecs IDL declares `VideoFrame.copyTo()` destination as `AllowSharedBufferSource`, so a SharedArrayBuffer-backed typed array is permitted by the specification. SharedArrayBuffer availability in web content is gated by cross-origin isolation.
+- To enable SharedArrayBuffer in a document, MDN documents `Cross-Origin-Opener-Policy: same-origin` together with `Cross-Origin-Embedder-Policy: require-corp` or `credentialless`, unless blocked by Permissions Policy. COEP can block cross-origin no-CORS resources unless the response opts in with CORP; CORS-mode requests must still pass CORS checks. This could affect an app whose UI, media server, fonts, scripts or other resources use different origins/ports, so it must not be enabled without an origin/resource audit.
+- The current WebCodecs specification says promises returned by multiple `VideoFrame.copyTo()` calls are not guaranteed to resolve in the order they were invoked. A replay ring must therefore associate each copy with an explicit frame sequence, timestamp and reserved slot, and publish the slot as valid only after its own copy promise resolves. Ring wrap, reconnect epochs and late completion must not allow an older copy to overwrite a newer slot.
+- `VideoFrame.format` is nullable. The specification says it is null when the underlying format does not map to a recognized VideoPixelFormat. `allocationSize()` and `copyTo()` without an explicit output format then throw NotSupportedError. An explicit RGB output format (`RGBA`, `RGBX`, `BGRA`, `BGRX`) invokes the conversion-to-RGB path, but this conversion and allocation must be measured and tested with hardware decoder output.
+
+### Candidate worker arrangement for the PoC
+
+1. Keep the UI thread responsible only for controls, live/replay overlay composition and user interaction.
+2. Place each replay receiver's encoded ring, VideoDecoder, decoded-frame ring and timeline metadata in a dedicated worker (or a carefully partitioned shared worker if measurement proves appropriate).
+3. Prefer a worker-owned bounded ArrayBuffer/TypedArray ring first. Use `VideoFrame.copyTo()` into reserved slots, record frame metadata separately, and close the VideoFrame promptly after the copy completes. Publish each slot only when its copy is complete and its epoch/sequence still matches.
+4. Transfer an OffscreenCanvas to the worker for replay rendering where supported. The UI sends commands such as selected frame index, play/pause and camera choice; the worker renders the chosen frame. This avoids requiring SharedArrayBuffer merely to keep pixel history accessible to both threads.
+5. Treat SharedArrayBuffer as an optional optimization only if simultaneous access from UI and worker is actually needed. Before enabling it, audit COOP/COEP effects on all same-origin and cross-origin resources and verify `crossOriginIsolated` at runtime.
+6. Test VideoFrame.copyTo() with the actual hardware decoder output. Log `frame.format`, `allocationSize()` for the selected native or RGB format, copy latency, failures, per-slot sequence/timestamp, and output-surface release behavior. Do not assume every hardware decoder output exposes a directly copyable native pixel format.
+
+### Consequences for JudoReplayKit
+
+- A worker-owned ring is a credible way to protect UI responsiveness without introducing SharedArrayBuffer deployment constraints. It does not reduce the total decoded pixel memory requirement and it does not, by itself, isolate replay CPU/GPU usage from the live path.
+- SharedArrayBuffer could permit low-overhead shared ring access, but the required cross-origin isolation headers may be operationally intrusive, especially if MediaMTX and Caddy endpoints use distinct origins or if third-party resources are present. Avoid making it a mandatory prerequisite.
+- Explicit copy-completion ordering is now a required correctness test. A fast copy can finish after a later frame copy; the ring must not equate invocation order with completion order.
+- The nullable VideoFrame format is an important hardware/software compatibility test. If a hardware output is opaque, the implementation may need explicit RGB conversion or a different rendering/cache path. This can change both CPU/GPU load and memory cost.
+
+### Required PoC additions
+
+- Compare main-thread versus dedicated-worker decode/copy/render while measuring UI input responsiveness and dropped frames.
+- Compare worker-owned ArrayBuffer ring versus SharedArrayBuffer ring only on a cross-origin-isolated test origin; verify COEP does not block required media/API/assets.
+- Deliberately delay selected copy promises or use a test harness to complete frame copies out of order; verify frame sequence/timestamp correctness and ring overwrite protection.
+- Test `VideoFrame.format === null` handling and explicit RGBA conversion using actual hardware decoder output on Windows and Linux.
+- Test worker termination, device loss, camera reconnect, decoder reset and ring generation changes; stale asynchronous copy completions must not republish invalid slots.
+
+### Assessment
+
+A dedicated worker owning the replay decoder, bounded copy ring and OffscreenCanvas is a strong next PoC arrangement because it protects UI responsiveness and avoids making SharedArrayBuffer/COOP/COEP a core deployment requirement. SharedArrayBuffer remains optional. Copy ordering and nullable hardware VideoFrame formats add two new correctness gates. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs VideoDecoder worker exposure, VideoFrame format, copyTo and asynchronous completion order: https://www.w3.org/TR/webcodecs/
+- MDN COEP and cross-origin isolation requirements: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cross-Origin-Embedder-Policy
+- MDN transferable objects and ArrayBuffer ownership transfer: https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Transferable_objects
+- MDN OffscreenCanvas: https://developer.mozilla.org/en-US/docs/Web/API/OffscreenCanvas
+- Chrome WebCodecs worker guidance: https://developer.chrome.com/docs/web-platform/best-practices/webcodecs
