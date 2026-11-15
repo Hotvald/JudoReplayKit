@@ -1539,3 +1539,13 @@ No application code, requirements, architecture or configuration was changed by 
 Inspect the exact setup script and its checksum-download logic, plus the downloaded archive's file metadata and SHA-256, without executing or extracting the archive. Verify the release's supported integrity mechanism (including the publisher's documented GitHub artifact-attestation/checksum process) before deciding whether to correct the script. Do not substitute an untrusted checksum source or silently disable verification.
 
 Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain out of scope. Requirements Draft 0.4 and DECISIONS.md remain unchanged. Overall status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation.
+
+
+### Addendum — downloaded MediaMTX archive metadata
+
+**Source:** User-provided PowerShell output, 2026-11-15.
+
+- The downloaded archive exists at `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads\\mediamtx_v1.21.3_windows_amd64.zip`.
+- Reported file size: 28,734,316 bytes; LastWriteTime: 2026-11-15 16:09:53.
+- This confirms the local file's presence and reported size only. Its SHA-256 and authenticity/integrity remain unverified. Do not extract or execute it pending verification.
+- Still requested: local SHA-256 output and the complete setup script source, to inspect the failed checksum retrieval logic.
