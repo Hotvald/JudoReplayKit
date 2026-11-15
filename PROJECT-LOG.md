@@ -2569,3 +2569,46 @@ Assumptions: 30 fps, 15 seconds, tightly packed 8-bit 4:2:0/NV12 (1.5 bytes per 
 ### Assessment
 
 The strongest next experiment is a continuously warm replay decoder with a bounded decoded-frame cache plus a compressed access-unit ring. This is a candidate to test, not a selected architecture. If full-horizon decoded caching is too expensive, the hybrid fallback must be judged against measured first-frame latency, not assumed to be instant. Overall project status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+## 2026-11-15 — Hardware decoding: Windows/Linux feasibility and VideoFrame resource retention
+
+**Scope:** Review of the current W3C WebCodecs specification, MDN API documentation, Microsoft Edge H.264 playback guidance, and Chromium platform decoder documentation. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified findings
+
+- WebCodecs `VideoDecoderConfig.hardwareAcceleration` accepts `no-preference`, `prefer-hardware`, and `prefer-software`. These are hints, not guarantees; a user agent may ignore them. The W3C specification notes that hardware decoding can reduce CPU load and improve throughput consistency, but may have higher startup latency and can be less robust with malformed or non-conforming bitstreams.
+- `VideoDecoder.isConfigSupported()` reports whether the supplied decoder configuration is supported. It does not identify the actual decoder backend selected at runtime. `MediaCapabilities.decodingInfo()` reports `supported`, `smooth`, and `powerEfficient`, but those signals must not be treated as direct proof that a specific VideoDecoder instance is using a hardware backend.
+- On Windows, Microsoft Edge documentation describes H.264 decoder selection using Media Foundation/DXVA and D3D11 hardware paths, with FFmpeg software decoding as fallback when hardware acceleration is disabled or the GPU/profile is unsupported. Chromium source also contains a D3D11 H.264 decoder implementation. Actual availability remains dependent on GPU, driver, profile, resolution and browser build.
+- On Linux, Chromium's own VA-API documentation describes Linux VA-API as not supported by default in the documented configuration and says enabling it may work on certain configurations without guarantees. This makes browser hardware decoding less predictable across Linux distributions and GPU/driver combinations than a simple cross-platform feature flag would suggest.
+- WebCodecs `VideoFrame` objects reference underlying media resources. Those resources may occupy system memory, GPU memory, or decoder/system resources; they remain alive while referenced. `close()` releases that reference, while `clone()` creates another object referencing the same underlying resource rather than necessarily copying pixels. Transferring a VideoFrame moves its resource reference to the destination object and closes the source object.
+- Consequently, hardware decoding does not make a retained decoded-frame ring free or automatically small. Retaining VideoFrames may pin scarce GPU/decoder surfaces or other resources even if the pixel data is not copied into ordinary JavaScript memory. The actual allocation strategy is implementation-specific and must be measured on target systems. Do not reuse the earlier tightly-packed NV12 payload estimates as a prediction of hardware-surface allocation.
+
+### Consequences for JudoReplayKit
+
+1. Windows is currently the stronger first target for a browser/WebCodecs hardware-decoding PoC. Linux remains a required separate compatibility gate, not something inferred from Windows success.
+2. For each browser/OS/GPU combination, test `no-preference`, `prefer-hardware`, and (where accepted) `prefer-software` with the exact camera H.264 profile, resolution, frame rate and bitstream. Record support-query results separately from actual runtime backend evidence.
+3. Verify actual decoder selection using platform/browser diagnostics where available (for example Edge `edge://media-internals` decoder name and Windows GPU Video Decode telemetry). Do not infer hardware use solely from `isConfigSupported()` or a successful `configure()` call.
+4. Measure startup-to-first-output, sustained decode throughput, CPU use, GPU Video Decode use, system memory, dedicated/shared GPU memory, active VideoFrame count, decoder queue depth and frame drops. Repeat with one and two cameras and with two simultaneous replay operations.
+5. Explicitly test long-lived retained VideoFrames and eviction. Measure whether keeping decoded frames starves the decoder's output-surface pool, increases memory pressure, or stalls new output. Ensure every owned frame is closed exactly once when evicted. Compare keeping native VideoFrames against copying selected frames into a separately bounded representation; any copy cost must be measured.
+6. Keep software decoding as a tested fallback, but do not assume it will meet the two-camera load or instant-replay latency requirement. Hardware acceleration is a performance option, not a substitute for bounded buffers, keyframe recovery, or replay/live isolation.
+7. The Linux PoC must identify the exact distro, browser package/build, GPU model, kernel, VA-API driver and supported H.264 profiles. A result on one Linux configuration does not establish general Linux support.
+
+### PoC additions
+
+- Matrix: Windows 11 + current Edge/Chrome; at least one supported Linux distribution + current Chromium-based browser; Firefox may be included as a separate exploratory target but must not be presumed to expose equivalent WebCodecs hardware behavior.
+- For each target, capture browser version, OS/kernel, GPU and driver, H.264 codec string/profile/level, dimensions, frame rate, bitrate, GOP/IDR interval, `isConfigSupported()` result for each acceleration preference, actual decoder backend evidence, first-output latency, sustained throughput, CPU/GPU and memory metrics.
+- Stress the decoded cache for 5/15/30 seconds at target frame rate, including two cameras and two concurrent replay views. Observe output-surface starvation, decoder queue growth, memory growth, and recovery after eviction.
+- Treat the exact same source bitstream as a compatibility input for hardware and software paths. Record decode errors and frame continuity; do not silently switch paths without recording the fallback.
+
+### Assessment
+
+Hardware decoding is a credible way to reduce CPU pressure, particularly on Windows, but it does not resolve the decoded-frame retention cost and may introduce constrained GPU/decoder-surface pools. Windows should be the first hardware-decoding PoC target; Linux should be tested separately with explicit VA-API environment evidence. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs, hardware acceleration hints and resource model: https://www.w3.org/TR/webcodecs/
+- MDN `VideoDecoder.isConfigSupported()`: https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder/isConfigSupported_static
+- MDN `MediaCapabilities.decodingInfo()`: https://developer.mozilla.org/en-US/docs/Web/API/MediaCapabilities/decodingInfo
+- MDN WebCodecs VideoFrame resource handling: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+- Microsoft Edge H.264 playback and hardware decoder diagnostics: https://learn.microsoft.com/en-us/troubleshoot/microsoft-edge/development/video-playback-issues
+- Chromium VA-API/Linux notes: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
+- Chromium D3D11 H.264 decoder implementation: https://chromium.googlesource.com/chromium/src/media/+/2f961f1c2198b47b00144e1b544f3cd33d9ab089/gpu/windows/d3d11_video_decoder.cc
