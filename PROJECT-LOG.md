@@ -2031,3 +2031,46 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - MDN RTCRtpScriptTransformer: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpScriptTransformer
 - W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
 - MDN Using WebRTC Encoded Transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
+
+
+## 2026-11-15 — MediaMTX v1.21.3 source periodically requests keyframes from WebRTC publishers
+
+**Scope:** Direct read of the exact MediaMTX v1.21.3 source files through the repository's tagged source. No local services or streams were started or changed.
+
+### Verified source behaviour
+
+- In MediaMTX v1.21.3, internal/protocols/webrtc/inbound_track.go defines keyFrameInterval as 2 seconds.
+- When an incoming WebRTC video track starts, InboundTrack.start() starts a ticker at that interval and writes an RTCP Picture Loss Indication (PLI) to the inbound WebRTC receiver's RTCP channel, identifying the publisher track SSRC.
+- This is a server-originated periodic keyframe request to the WebRTC publishing source. It is not a forwarding of an individual downstream browser reader's PLI.
+- The source also reads incoming RTCP Sender Reports and passes them to the RTP receiver for packet-to-NTP mapping. This is relevant to the separate camera timestamp/synchronization PoC.
+- MediaMTX's WebRTC outbound track code independently generates RTCP Sender Reports for readers. The outbound track drains incoming RTCP packets from the reader side; the inspected code does not relay those reader PLI packets upstream to the publisher.
+- This is consistent with the MediaMTX maintainer's explanation in discussion #3567: downstream readers are isolated from the source, and blindly forwarding each reader's PLI could cause a burst of keyframe requests. The maintainer stated that periodic PLI requests are already performed for WebRTC.
+
+### What this improves — and what it does not prove
+
+- For a camera publishing to MediaMTX using WebRTC, the server's built-in two-second PLI cadence is a promising mechanism to keep IDRs arriving regularly. It could reduce the time a newly reset independent replay decoder waits for a decodable keyframe.
+- It does not guarantee that a particular camera/encoder honours PLI, that a usable IDR plus SPS/PPS arrives within two seconds, or that the browser-side WebCodecs decoder can decode the actual access units.
+- It does not apply to a camera source publishing through RTMP; RTMP does not carry this WebRTC RTCP feedback path. The actual camera-to-MediaMTX protocol is therefore decisive.
+- The two-second interval is an implementation detail of MediaMTX v1.21.3, not a JudoReplayKit requirement or a measured maximum recovery time. It must be verified with the selected source and may have bitrate/encoder-load implications.
+- Since MediaMTX sends periodic PLIs independently of the replay UI, this mechanism may keep the incoming WebRTC stream's keyframe cadence healthy without the replay client needing to forward its own requests. However, the replay decoder must still maintain its own valid compressed/decode history and handle missing or delayed keyframes explicitly.
+
+### Required PoC checks
+
+1. Use the actual candidate camera source protocol and record every PLI emitted by MediaMTX, plus the corresponding IDR/SPS/PPS arrival at the server and browser receiver.
+2. Measure actual keyframe interval and worst observed time from PLI to decodable IDR over sustained two-camera operation.
+3. Verify the PLI cadence for both simultaneous camera paths and after reconnects.
+4. Compare camera bitrate, encoder load, live latency and recording continuity with the MediaMTX periodic PLI behaviour.
+5. Confirm whether the actual mobile camera app/source publishes using WebRTC or RTMP before assuming this mechanism is available.
+
+### Assessment
+
+- This source inspection materially improves the WebRTC ingest candidate: MediaMTX v1.21.3 already sends periodic PLI requests to WebRTC publishers every two seconds.
+- It does not remove the need for the keyframe recovery PoC and does not help an RTMP ingest path through RTCP.
+- No protocol or architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 inbound WebRTC track source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
+- MediaMTX v1.21.3 outbound WebRTC track source: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
+- MediaMTX discussion on reader PLI isolation and periodic requests: https://github.com/bluenviron/mediamtx/discussions/3567
+- RFC 8834, PLI behaviour: https://www.rfc-editor.org/rfc/rfc8834.html
