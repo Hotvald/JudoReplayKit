@@ -4023,3 +4023,55 @@ This is a targeted robustness test for the HLS/WebCodecs worker because it will 
 - gohlslib v2.4.7 RAM part storage: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_ram.go
 - gohlslib v2.4.7 disk part storage and finalization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_disk.go
 - gohlslib v2.4.7 disk parent file finalization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/file_disk.go
+## 2026-11-15 — LL-HLS segment boundaries, random-access startup and codec-configuration epoch
+
+**Scope:** Exact source inspection of the versions pinned by MediaMTX v1.21.3: gohlslib v2.4.7 and mediacommon v2.9.7. This is source-level evidence, not a camera/runtime PoC.
+
+### Verified H.264 startup and segment behaviour
+
+- gohlslib's H.264 segmenter does not begin writing a video track until it sees a random-access access unit. Before that point, it silently skips samples. It also initializes its H.264 DTS extractor at that first random-access point. Therefore HLS startup/readiness is dependent on the camera's actual random-access cadence; `hlsAlwaysRemux` does not make a decoder-ready first frame appear before the first usable random-access AU.
+- For fMP4, a segment is rotated only when a random-access AU is encountered and the elapsed segment duration has reached `SegmentMinDuration`. The configured segment duration is a minimum/target, not a strict maximum. A long or irregular GOP can make a segment exceed the configured duration and changes the real rolling-history duration and memory/disk footprint.
+- LL-HLS parts rotate on the adjusted part duration, independently of segment rotation. A part boundary is not automatically a decoder restart point.
+- The pinned `mediacommon` H.264 `IsRandomAccess()` implementation treats an AU as random access when it contains an IDR NALU or an SEI recovery-point message with `recovery_frame_cnt == 0` before the first non-IDR picture. This is more precise than treating every MP4 sync flag or `EXT-X-PART:INDEPENDENT=YES` as proof of an IDR. The replay decoder must inspect the actual NAL units and retain separate IDR and recovery-point classifications.
+
+### Codec configuration is fixed after HLS init creation
+
+- gohlslib's H.264 segmenter updates the H.264 codec's stored SPS/PPS only while the HLS stream's init file is not yet present.
+- `generateAndCacheInitFile()` creates and registers the fMP4 init resource. The inspected path does not regenerate the init resource or emit a new `EXT-X-MAP` when later in-band SPS/PPS values differ.
+- Consequently, a camera changing resolution, profile, level, chroma/bit-depth or SPS/PPS during a running HLS muxer must be treated as a codec-configuration epoch change. The PoC must either prove correct new init-map/discontinuity handling or detect and reject/stop the replay epoch rather than parsing later samples against a stale `avcC`.
+
+### Segment size and resource budget
+
+- MediaMTX v1.21.3 defaults `hlsSegmentMaxSize` to 50 MiB and passes it to gohlslib. gohlslib counts sample payload bytes against the parent segment size; a write that would exceed the configured limit returns an error.
+- This is a per-segment ceiling, not a total HLS-ring, parser, compressed-sample-cache or decoded-frame memory ceiling. With two cameras, the total resource budget still depends on actual bitrate, actual GOP-extended segment duration, retained segment count, storage mode and any duplicated replay buffers.
+- The low-latency muxer requires at least seven segments and inserts seven initial GAP entries. Those entries are playlist placeholders, not decodable history. A PoC must measure the first usable media interval rather than count playlist entries.
+
+### `hlsAlwaysRemux` readiness nuance
+
+- MediaMTX v1.21.3 creates an automatic HLS muxer on `PathReady` only when `hlsAlwaysRemux` is true and the path is not configured `sourceOnDemand`.
+- For a source-on-demand path, that automatic pre-creation branch is skipped. A muxer is instead created through the request path when a reader asks for HLS. Thus `hlsAlwaysRemux: true` alone is not proof that a source-on-demand camera's LL-HLS history is already warm before the replay request.
+- The exact deployment path configuration (including `sourceOnDemand`) must therefore be included in the live-edge readiness PoC.
+
+### Required PoC additions
+
+1. Measure cold-start time from path ready / first HLS request to first decodable IDR and separately to first decodable recovery-point AU, for each real camera and its configured GOP.
+2. Test short, normal and deliberately long GOPs. Record actual segment durations, playlist retention window, first playable timestamp and memory/segment size. Do not infer these from `hlsSegmentDuration` alone.
+3. Change SPS/PPS and resolution in a controlled test stream after the HLS init resource is created. Verify whether a new init resource, `EXT-X-MAP` and discontinuity are produced. Until proven, classify such a change as a hard codec-epoch boundary.
+4. Test actual IDR and recovery-point SEI samples independently with MP4Box/WebCodecs. Do not let the MP4 sync flag or HLS independent-part flag select a decoder reset point.
+5. Run the same readiness test with `sourceOnDemand` both false and true; verify whether the muxer and retained HLS history exist before the first replay request.
+
+### Assessment
+
+This adds concrete startup, variable-GOP, codec-change and source-on-demand gates to the LL-HLS/WebCodecs PoC. It does not establish that the candidate passes those gates and does not select an architecture. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 pins gohlslib v2.4.7 and mediacommon v2.9.7: https://github.com/bluenviron/mediamtx/blob/v1.21.3/go.mod
+- gohlslib v2.4.7 H.264 random-access detection, DTS initialization and fMP4 segment/part rotation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- gohlslib v2.4.7 H.264 random-access and init-file SPS/PPS update gate: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- gohlslib v2.4.7 init-file creation, segment/part playlist generation and size handling: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 per-segment size default and seven-segment LL-HLS minimum: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+- mediacommon H.264 random-access classification (IDR or immediate recovery point): https://github.com/bluenviron/mediacommon/blob/v2.9.7/pkg/codecs/h264/is_random_access.go
+- mediacommon H.264 recovery-point SEI requires `recovery_frame_cnt == 0`: https://github.com/bluenviron/mediacommon/blob/v2.9.7/pkg/codecs/h264/sei.go
+- MediaMTX v1.21.3 automatic HLS muxer creation and `sourceOnDemand` condition: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
+- MediaMTX v1.21.3 HLS defaults including 50 MiB segment max size: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
