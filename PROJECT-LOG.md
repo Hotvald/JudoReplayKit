@@ -3736,3 +3736,32 @@ The HLS/fMP4 → MP4Box.js → WebCodecs candidate still looks promising, but it
 - MP4Box.js v2.5.0 package metadata and BSD-3-Clause declaration: https://github.com/gpac/mp4box.js/blob/v2.5.0/package.json
 - MP4Box.js v2.5.0 license: https://github.com/gpac/mp4box.js/blob/v2.5.0/LICENSE
 - MP4Box.js browser/progressive parsing and extraction documentation: https://github.com/gpac/mp4box.js/tree/v2.5.0
+## 2026-11-15 — gohlslib LL-HLS parts are complete fMP4 fragments, but INDEPENDENT is not an IDR guarantee
+
+**Scope:** Exact source inspection of gohlslib v2.4.7 `muxer_part.go` and `muxer_segment_fmp4.go`. Source-level validation of the MP4Box.js input format; no runtime parse test.
+
+### Verified part structure
+
+- When an LL-HLS part is finalized, gohlslib creates an `fmp4.Part` containing a sequence number and per-track `PartTrack` entries with track ID, base decode time and samples, then serializes it with `Part.Marshal()` to the part storage.
+- The part is therefore a complete fragmented-MP4 media fragment (moof/mdat payload) that can be appended after the playlist's `EXT-X-MAP` initialization segment. This is compatible in principle with MP4Box.js incremental fragmented-MP4 parsing.
+- The part storage is separate from the init segment and the HLS segment playlist entry; the worker must retain the correct init-segment/codec epoch and append each part exactly once.
+- gohlslib sets `EXT-X-PART:INDEPENDENT=YES` when the leading track (video when present) has a sample whose MP4 `IsNonSyncSample` flag is false. Since MediaMTX can classify recovery-point SEI as random access and mark the resulting sample sync, `INDEPENDENT=YES` is not proof that the part starts with a WebCodecs-compatible IDR.
+
+### Consequences
+
+- The HLS worker can feed each finalized `EXT-X-PART` payload to MP4Box.js as a media fragment after the matching `EXT-X-MAP` init segment; it does not need to wait for the full HLS segment to close.
+- Maintain a part identity `(camera, discontinuity sequence, media sequence, part index, URI)` and reject duplicates. If the worker starts mid-segment, fetch the required earlier part(s) or wait for a verified IDR before decoding.
+- Do not use `EXT-X-PART:INDEPENDENT=YES`, MP4Box `is_rap`, or the MP4 sync flag alone as the decoder-reset/keyframe decision. Inspect the H.264 NAL types and require an actual IDR for a fresh WebCodecs AVC decoder.
+- The part's `BaseTime`/sample DTS and sample CTS are the timing inputs for WebCodecs; preserve both and feed in decode order.
+
+### Required PoC
+
+- Capture one real `EXT-X-MAP` plus consecutive `EXT-X-PART` responses from MediaMTX v1.21.3 and parse them incrementally with MP4Box.js. Verify the parser emits the same video samples and DTS/CTS as parsing the completed segment.
+- Compare HLS `INDEPENDENT` and MP4 `is_rap` flags against actual IDR NAL types for both normal IDR and recovery-point-SEI sources.
+- Verify no sample is duplicated or omitted when the playlist transitions from parts to the completed segment URI.
+
+### Evidence
+
+- gohlslib v2.4.7 part finalization and independent flag: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_part.go
+- gohlslib v2.4.7 fMP4 segment storage: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segment_fmp4.go
+- MP4Box.js fragmented MP4 parsing/sample extraction: https://github.com/gpac/mp4box.js/tree/v2.5.0
