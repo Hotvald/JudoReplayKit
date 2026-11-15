@@ -4223,3 +4223,46 @@ This is a concrete HLS availability risk, not evidence that ordinary camera sett
 - MediaMTX v1.21.3 HLS `FromStream()` callbacks return muxer errors: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
 - MediaMTX v1.21.3 HLS muxer-instance reader error handling and destruction: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
 - MediaMTX v1.21.3 automatic HLS muxer recreation pause: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
+
+## 2026-11-15 — Recording and HLS use separate MediaMTX stream readers; failure isolation is per consumer
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 recorder, HLS muxer, and stream-reader lifecycle. This is a source-derived isolation finding. No runtime fault-injection or load test has been run.
+
+### Verified architecture
+
+- The recorder creates its own `stream.Reader` in `recorderInstance.initialize()`, registers codec-specific recording callbacks through its fMP4/MPEG-TS format implementation, and calls `Stream.AddReader()` when initialization succeeds.
+- The HLS muxer instance independently creates a different `stream.Reader`, registers HLS callbacks through `protocols/hls.FromStream()`, starts its gohlslib muxer, and then calls `Stream.AddReader()`.
+- These are not one shared reader or one shared callback worker. Each `stream.Reader.start()` creates its own ring buffer, worker goroutine and error channel. Each ring buffer is sized from the stream's configured `WriteQueueSize`.
+- Each reader's worker executes that reader's callbacks. If one callback returns an error, that reader's worker exits and reports the error through that reader's own error channel. The HLS muxer instance responds by removing its HLS reader and closing its gohlslib muxer. The recorder instance responds by removing its recording reader and closing its recording format instance.
+- The recorder's parent `Recorder.run()` uses a default two-second restart pause before creating a new recorder instance after its instance exits. The automatic HLS muxer parent uses a ten-second recreation pause after an instance crash. An HLS muxer created on demand by a specific author follows a different lifecycle: its parent returns the error instead of automatically recreating that muxer.
+- The HLS muxer API aggregates its own reader's `OutboundFramesDiscarded` counter. The reader itself logs when its queue is too slow and callbacks are discarded. The recorder reader has the same queue/discard mechanism, but its per-reader discard count is not exposed as a dedicated recorder API metric in the inspected path.
+
+### Consequence for JudoReplayKit's non-interference requirement
+
+- A failure returned by the HLS conversion callback is handled by the HLS reader/muxer lifecycle; the source path does not directly close the recorder's separate reader. Conversely, a recording callback error is handled by the recorder instance lifecycle and does not directly close the HLS muxer reader.
+- This is meaningful fault isolation, but it is **not proof of zero live impact**. All readers still consume the same underlying stream fan-out and compete for process CPU and memory. Each additional reader allocates another queue and worker. A slow reader can discard its own queued callbacks; it must not be assumed to back-pressure or preserve every frame automatically.
+- The existing HLS-session accounting reader is a further, separate reader type. It must not be confused with the HLS muxer conversion reader or with the recorder reader. A design that adds a WebCodecs replay ingest reader must count that reader separately too.
+- Therefore, “recording continues if HLS replay fails” is a source-supported architectural expectation, not yet an acceptance-test result. The stronger requirement—replay must not degrade live viewing or continuous recording under load—still requires measurement on the actual PC and camera streams.
+
+### Required isolated PoC tests
+
+1. Run one camera with continuous recording and one live HLS player. Capture baseline CPU, process RAM, recording segment cadence, HLS part cadence, and all available reader/muxer discard counters.
+2. Add the proposed replay consumer without changing the live or recording configuration. Verify whether it creates a new stream reader, a new HLS session reader, or both. Record the additional queue/worker count and memory.
+3. Inject a controlled HLS callback/muxer error. Confirm that the HLS instance closes/recreates according to its actual automatic/on-demand lifecycle while recording segments continue without a missing interval.
+4. Inject a controlled recording callback error. Confirm the recorder's own two-second restart path and verify that the live HLS player remains active. Mark the recording gap explicitly; do not report it as uninterrupted.
+5. Saturate one reader queue deliberately. Confirm that its discard counter/log changes while other readers continue receiving frames; measure whether CPU contention or shared fan-out still affects their latency.
+6. Repeat with two cameras, replay scrubbing, pause/frame-step, and simultaneous continuous recording. Check disk writes, process RAM, queue discards, timestamps, and recording continuity over a multi-hour run.
+
+### Assessment
+
+The source confirms separate reader queues and separate failure/restart lifecycles for recording and HLS conversion. This supports the intended isolation boundary, but it does not establish performance isolation under contention and does not satisfy the live non-interference acceptance test by itself. Status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 recorder reader creation, registration and AddReader: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/recorder_instance.go
+- MediaMTX v1.21.3 recorder restart lifecycle and two-second default pause: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/recorder.go
+- MediaMTX v1.21.3 fMP4 recording callbacks and per-format reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4.go
+- MediaMTX v1.21.3 HLS muxer reader creation, registration and instance teardown: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+- MediaMTX v1.21.3 HLS automatic/on-demand muxer lifecycle and ten-second recreation pause: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
+- MediaMTX v1.21.3 stream reader ring buffer, callback worker, per-reader error channel and discard counter: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 stream AddReader/RemoveReader and reader fan-out registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
