@@ -1770,3 +1770,36 @@ Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and a
 **Next review:** Build a dependency inventory from the exact generated variant recipe/build log and its downloaded source archives, mapping each enabled/linked component to version, licence, required notices/source obligations, and whether it is actually present in the packaged executables. Then request an independent review from another AI (DeepSeek or Mistral) against the evidence, explicitly asking it to challenge both the licensing analysis and the provenance/reproducibility conclusions. Do not extract or execute the FFmpeg archive before that review gate.
 
 **Overall status:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.
+
+## 2026-11-15 — FFmpeg static-linking and LGPL dependency-packaging gap identified
+
+**Source:** Exact FFmpeg-Builds workflow/job logs and repository build scripts at recipe commit `c9fe5114060e507409f7ee07edfd82efaf25d767`; FFmpeg source licence/configuration at source commit `d838f9f9aeb0e09b4d068e2af20a46a12640696f`. Read-only source/log review. The candidate ZIP remains unextracted and unexecuted.
+
+### Verified findings
+
+- The exact Windows x64 LGPL 9.0 build log contains the actual linker command for the FFmpeg executables. It links external libraries statically; this is no longer merely an inference from the configure flags.
+- The linker command includes `gmp` and `libaribb24`. FFmpeg's licence overview at the pinned source revision classifies both as LGPLv3 external libraries. The build uses `--enable-version3`, consistent with enabling LGPLv3-compatible components.
+- The packaging script `variants/windows-install-static.sh` copies the generated binaries, FFmpeg documentation and presets into the package. The main build script copies the selected FFmpeg licence file (for this variant, `COPYING.LGPLv3`) to `LICENSE.txt`. The reviewed packaging path does not show a step that collects the full individual licence/notice texts for every statically linked external dependency, nor does it show provision of the corresponding dependency source and application/relink materials in the produced ZIP.
+- LGPLv3 section 4(d)(0) describes an alternative compliance route for a combined work using a suitable shared-library mechanism: provide the Minimal Corresponding Source and Corresponding Application Code in a form suitable for recombination/relinking with a modified library. The exact obligations and available compliance route must be assessed for each applicable library and the actual distribution model; this log is a technical risk finding, not a legal opinion.
+- The reviewed ZIP contents/build log identify FFmpeg executables, documentation, presets and the FFmpeg LGPLv3 licence text. The available evidence does not establish that the ZIP contains the source/relink materials or complete third-party licence/notice inventory needed to demonstrate compliance for all statically linked components.
+- The absence of those materials from the reviewed packaging script is a material documentation/compliance gap. It does **not**, by itself, establish that the binaries are unlawful, malicious, or impossible to distribute under any compliant arrangement. Additional source, relink, notice and distribution evidence could change the assessment.
+- The build's configure command does not show `--enable-gpl` or `--enable-nonfree`, and it explicitly disables several GPL-associated libraries. This remains a positive configuration finding, but does not resolve LGPL obligations for statically linked LGPL dependencies or the licences of every other linked component.
+
+### Assessment / decision
+
+- **Do not approve this candidate ZIP for bundling or distribution in JudoReplayKit at this stage.**
+- The candidate archive remains checksum-matched to the publisher's release manifest, but its GitHub Artifact Attestation lookup returned HTTP 404; provenance is still unverified.
+- Do not extract or execute the archive yet. Continue with a component-by-component inventory of every library present in the actual linker inputs/binaries: exact version/source, licence, required notices, source availability, static-link/relink obligations, and any separate patent or redistribution terms.
+- Investigate a deliberately minimal FFmpeg build containing only the codecs, demuxers, muxers and protocols actually needed by the PoCs. A smaller build may reduce the dependency and licence-review surface, but it must still be verified from its actual configure/build/link logs and package contents.
+- Obtain independent review of this evidence and the proposed compliance interpretation from DeepSeek and Mistral before changing the release/tooling decision.
+
+### Evidence links
+
+- Exact FFmpeg build job: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
+- Build recipe revision: https://github.com/FFmpeg-Builds/FFmpeg-Builds/commit/c9fe5114060e507409f7ee07edfd82efaf25d767
+- FFmpeg source revision: https://github.com/FFmpeg/FFmpeg/commit/d838f9f9aeb0e09b4d068e2af20a46a12640696f
+- FFmpeg source licence file at that revision: https://github.com/FFmpeg/FFmpeg/blob/d838f9f9aeb0e09b4d068e2af20a46a12640696f/LICENSE.md
+- GNU LGPLv3 text: https://www.gnu.org/licenses/lgpl-3.0-standalone.html
+
+No local files were extracted or executed. No MediaMTX server was started. No production or Rev.8 files, services, firewall rules, ports or recordings were changed. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
