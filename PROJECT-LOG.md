@@ -2385,3 +2385,44 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 - MediaMTX metrics documentation: https://mediamtx.org/docs/features/metrics
 - MediaMTX v1.21.3 WebRTC session API definitions: https://pkg.go.dev/github.com/bluenviron/mediamtx/internal/defs@v1.21.3
 - MediaMTX issue #6269 (reported multiple-PPS failure): https://github.com/bluenviron/mediamtx/issues/6269
+
+
+## 2026-11-15 — Additional MediaMTX H.264 compatibility gates: multiple PPS and fMP4 placeholder SPS
+
+**Scope:** Reviewed MediaMTX upstream issue reports #6269 and #6465 against the v1.21.3 release notes and the documented H.264 handling changes. These are upstream-reported failure modes, not reproduced by JudoReplayKit. No local files, services or streams were touched.
+
+### Multiple PPS parameter sets — unresolved compatibility gate
+
+- Upstream issue #6269 reports a real broadcast feed containing one SPS and two PPS IDs. The report says that MediaMTX stores only one SPS/PPS pair and strips the other in-band parameter sets during remuxing; if a slice references the discarded PPS, readers and recordings become undecodable (non-existing PPS N referenced).
+- The reporter supplied an actual 1920x1080 59.94 broadcast capture over MPEG-TS/SRT, not only a synthetic test. The maintainer acknowledged that the described multiple-SPS/PPS stream is not currently supported and requested a packet dump.
+- The v1.21.3 release notes list the recovery-point-SEI changes but do not list a multiple-PPS fix. The issue remains a compatibility warning for the exact version under consideration; do not assume the problem is fixed.
+- This is more than a WebRTC-only concern: the report reproduces through MediaMTX RTSP readers and recorded MPEG-TS segments. It could therefore corrupt both review playback and the preserved match archive if a camera/source emits multiple PPS IDs.
+- Required test: parse all SPS/PPS IDs and each slice's referenced PPS ID in the source bitstream; repeat after each MediaMTX output/recording path. Verify all required parameter sets survive and the output decodes cleanly. A normal one-PPS phone-camera stream may pass, but it must be measured rather than assumed.
+
+### fMP4 first-segment placeholder SPS — separate archive/browser risk
+
+- Upstream issue #6465 reports that, after a MediaMTX restart while a publisher continues streaming, audio can arrive before the first H.264 random-access video unit. The fMP4 recorder may then write its segment initialization (avcC) using a default placeholder SPS (1920x1080) before the real camera SPS (reported as 1280x720) arrives.
+- Chrome configures its decoder from avcC; the reported first segment then fails with a decode pipeline error, while later segments work.
+- The issue report is for v1.21.2 and says the relevant code was the same on main at the time of reporting. It is not evidence that every v1.21.3 recording has the problem, but it is a credible first-segment/restart edge case that needs a regression test.
+- This affects the fMP4 archive/playback path, not the live WebRTC path directly. It reinforces the need to keep archive playback separate from the immediate replay design and to validate the first segment after every restart.
+- Test with audio arriving before video, restart MediaMTX while the publisher remains connected, inspect the first segment's avcC SPS/PPS against the actual in-band SPS/PPS, and decode the first segment in Chrome/Edge/Firefox. Also test segment rotation and camera reconnect.
+
+### Updated acceptance gates
+
+1. Reject a source/transport combination if required SPS/PPS IDs are lost or any reader/recording fails decode.
+2. Test actual camera streams, not only generated x264 test streams; include restart/join-mid-GOP and multiple-PPS cases.
+3. Validate first fMP4 segment init metadata after MediaMTX restart before relying on fMP4 as an archive/replay source.
+4. Keep MediaMTX WebRTC live/replay-reader tests distinct from fMP4 archive tests; success in one path does not imply success in the other.
+5. Record decoder errors, actual decoded frame counts, parameter-set IDs and first-valid-frame time, not only HTTP success or server session state.
+
+### Assessment
+
+- The MediaMTX v1.21.3 candidate still has a meaningful H.264 bitstream compatibility gate: multiple PPS handling has no documented fix in the release notes.
+- The fMP4 placeholder-SPS report adds a separate restart/first-segment regression test. It is not a reason by itself to reject WebRTC, but it prevents treating fMP4 output as automatically browser-decodable.
+- These are testable risks; no architecture decision is made. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX issue #6269, including maintainer response and broadcaster sample report: https://github.com/bluenviron/mediamtx/issues/6269
+- MediaMTX issue #6465, fMP4 placeholder SPS after restart: https://github.com/bluenviron/mediamtx/issues/6465
+- MediaMTX v1.21.3 release notes: https://github.com/bluenviron/mediamtx/releases/tag/v1.21.3
