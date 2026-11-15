@@ -1841,3 +1841,24 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - libaribb24 pinned upstream source: https://github.com/nkoriyama/aribb24/tree/5e9be272f96e00f15a2f3c5f8ba7e124862aec38
 - FFmpeg configure: https://github.com/FFmpeg/FFmpeg/blob/d838f9f9aeb0e09b4d068e2af20a46a12640696f/configure
 - FFmpeg source licence overview: https://github.com/FFmpeg/FFmpeg/blob/d838f9f9aeb0e09b4d068e2af20a46a12640696f/LICENSE.md
+
+
+## 2026-11-15 — Candidate FFmpeg feature scope narrowed for JudoReplayKit
+
+**Source:** Exact FFmpeg 9.0 Windows x64 LGPL build job log, job ID `132445937945`, workflow run `43593293993`. Read-only log review; no local execution.
+
+- The exact configure command enables a very broad external feature set, including VMAF, font/rendering libraries, AV1/HEVC/other codec libraries, subtitle stacks, SDL, OpenAL, Vulkan, OpenCL, hardware acceleration interfaces, messaging, and specialist broadcast/codec components. Examples in the command include `--enable-libvmaf`, `--enable-fontconfig`, `--enable-libharfbuzz`, `--enable-libfreetype`, `--enable-librsvg`, `--enable-libplacebo`, `--enable-libaom`, `--enable-libaribb24`, `--enable-libjxl`, `--enable-libvpx`, `--enable-libwebp`, `--enable-sdl2`, `--enable-openal`, `--enable-vulkan`, `--enable-opencl`, `--enable-libsrt`, and `--enable-libzmq`.
+- The command does not use `--disable-everything`; FFmpeg's normal built-in component set is therefore present alongside this large set of external integrations. The build log's component summary confirms the built-in H.264 decoder and common formats/protocols such as FLV, MOV/MP4, MPEG-TS, HLS, RTMP and RTSP are present in this candidate.
+- This supports a strong preliminary conclusion: the candidate is a general-purpose FFmpeg distribution, not a narrowly scoped JudoReplayKit build. Many enabled external features have no demonstrated requirement in the approved JudoReplayKit requirements.
+- Do not translate this observation directly into a final configure command. The exact minimum component list depends on the camera ingest protocol, actual recording container/segment format, whether MediaMTX or FFmpeg owns continuous recording, and whether the selected replay implementation uses FFmpeg CLI or the libav* APIs.
+- The PoC should therefore distinguish two possible FFmpeg roles:
+  1. **Media/recording utility role:** only if a PoC demonstrates FFmpeg is needed for ingest, remuxing, segment validation or playback support beyond the selected media server.
+  2. **Decode/frame-access role:** only if a PoC demonstrates FFmpeg's decoder/API is a suitable way to expose decoded frames for replay and exact stepping. A command-line `ffmpeg.exe`/ `ffprobe.exe` package alone does not establish a reliable exact frame-step implementation.
+- Preliminary minimum feature candidates for testing—not approved configuration flags—are H.264 decode, the actually used transport protocol(s), the actually used input container/demuxer(s), the selected recording container/muxer, timestamp handling, and any required pixel-format/scaling operations. Keep H.264 encoding disabled unless a demonstrated workflow needs re-encoding. Keep ffplay, subtitles, font rendering, VMAF, unrelated codecs, hardware APIs and GUI integrations out unless a test establishes a need.
+- A key architecture question remains open: if MediaMTX is responsible for camera ingest and continuous recording, FFmpeg may not be required for that role at all. The live-edge/replay PoCs must establish whether the media server's own archive/playback interfaces are sufficient, and whether a separate decoder is needed for exact frame stepping.
+
+**Next action:** Establish the real stream/recording format used by the two-camera PoC and determine which component owns ingest, continuous recording, replay extraction and frame decoding. Only then draft a testable `--disable-everything` feature profile (or determine that FFmpeg is not needed for one of the roles). Do not build, extract or execute the current candidate ZIP as part of this review.
+
+**Status:** Existing candidate ZIP not approved; architecture remains open. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+**Evidence:** https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
