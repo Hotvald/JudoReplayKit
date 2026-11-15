@@ -1635,3 +1635,17 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - No MediaMTX server, stream, service, firewall rule, port or recording was started or changed. Protected production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` remain untouched.
 
 **Next step:** Record this successful attestation, then separately verify the FFmpeg download's publisher-controlled integrity/provenance and inspect its exact build configuration/licensing evidence. Only after the tool package checks are reviewed should extraction/execution be considered. Continue isolated PoC work only; architecture lock and full Rev.9 implementation remain NO-GO pending feasibility evidence.
+
+
+### Addendum — FFmpeg-Builds release metadata checked (download still pending)
+
+**Source:** Public GitHub release metadata and workflow documentation reviewed on 2026-11-15. **Status:** Candidate identified; no FFmpeg archive downloaded, extracted or executed.
+
+- The setup script's pinned release tag `autobuild-2026-11-14-12-37` exists in repository `FFmpeg-Builds/FFmpeg-Builds`, published by `github-actions[bot]` on 2026-11-14.
+- The release contains the intended Windows x86_64 FFmpeg 9.0.2 LGPL static archive: `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip` (listed size approximately 160.8 MiB). The release also contains a `checksums.sha256` asset.
+- The exact release page distinguishes LGPL and GPL variants. The candidate is explicitly the **LGPL static** variant, not the GPL or nonfree variant. This label is useful but is not a substitute for inspecting the actual build configuration and included component licences.
+- The repository's build workflow creates `checksums.sha256` from the release artifacts using `sha256sum` and uploads that file with the release. This provides a publisher-generated checksum manifest for transfer-integrity verification.
+- FFmpeg upstream states that most FFmpeg code is LGPL v2.1+, while optional GPL components change the applicable FFmpeg licence; the exact binary's `-buildconf` and bundled third-party component licences still require inspection. A no-`--enable-gpl`/no-`--enable-nonfree` check is necessary but not, by itself, a complete legal review of all bundled dependencies.
+- The previously proposed archive filename and tag in the setup script match the release metadata. The earlier script run never reached the FFmpeg download because it stopped at the separate MediaMTX checksum URL.
+- Next: obtain the exact FFmpeg archive and its release `checksums.sha256` into the isolated PoC1 downloads folder; verify the archive hash against the manifest; then attempt GitHub Artifact Attestation verification for `FFmpeg-Builds/FFmpeg-Builds`. If no attestation is available, record that fact and rely only on the publisher-controlled release checksum plus further build/source review—do not claim attestation success.
+- Do not extract or execute FFmpeg until integrity and provenance results are reviewed. Do not start MediaMTX yet. Production and Rev.8 remain protected; overall status remains CONDITIONAL GO for isolated PoCs only, NO-GO for architecture lock/full implementation.
