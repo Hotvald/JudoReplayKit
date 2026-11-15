@@ -2704,3 +2704,28 @@ WebGPU offers a potentially efficient display path and a persistent GPUTexture c
 - MDN `GPUQueue.copyExternalImageToTexture()`: https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/copyExternalImageToTexture
 - MDN `GPUDevice.importExternalTexture()`: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/importExternalTexture
 - MDN WebCodecs worker and rendering guidance: https://developer.chrome.com/docs/web-platform/best-practices/webcodecs
+## 2026-11-15 — WebGPU texture-array limits and implications for a 15-second GPU frame ring
+
+**Scope:** Review of current WebGPU device limits and texture creation validation. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified findings
+
+- The current WebGPU specification defines `maxTextureArrayLayers` with a default device limit of 256. A 2D texture's `depthOrArrayLayers` cannot exceed the device's requested `maxTextureArrayLayers` limit.
+- The default `maxTextureDimension2D` is 8192. The texture width and height must each be within that limit. These are API resource-shape limits, not a guarantee that a device has enough physical memory for a large texture allocation.
+- WebGPU adapters may support limits better than defaults, but applications must inspect `GPUAdapter.limits` and request higher limits when creating the `GPUDevice`. A device is governed by the exact limits selected at creation. An application must not assume 450 array layers are available simply because one GPU happens to support them.
+- With the default 256-layer array limit, a 15-second 30-fps ring (450 frames per camera) cannot fit in one 2D texture array. It would require at least two arrays per camera (e.g. 256 + 194 layers), or individually managed textures/another layout. At 60 fps (900 frames), at least four default-sized arrays per camera are required.
+- If an adapter exposes a larger `maxTextureArrayLayers`, the application may request it, but this is an optional capability and should not be a cross-device requirement. Multiple arrays remain the portable baseline for a GPU texture ring.
+- The earlier RGBA8 memory estimate remains applicable to the total pixel payload regardless of whether frames are arranged in one or several arrays: approximately 3.73 GB per 1080p camera and 7.46 GB for two cameras at 30 fps/15 seconds, before overhead. Splitting into arrays solves a layer-count constraint, not the memory cost.
+
+### Consequences for JudoReplayKit
+
+1. Any GPU texture-ring PoC must log both `adapter.limits.maxTextureArrayLayers` and the actual `device.limits.maxTextureArrayLayers`, along with requested limits and texture creation failures.
+2. The implementation must support a default-limit layout (at least two arrays per 15-second 30-fps camera) or reject the GPU-cache path and fall back cleanly. Do not require elevated adapter limits.
+3. Texture arrays are not evidence that the full buffer fits in GPU memory. Measure actual allocation, device loss, out-of-memory errors, GPU dedicated/shared memory and performance under both camera streams.
+4. Given the raw RGBA8 payload cost, a full-resolution 15-second two-camera GPU texture ring remains a high-memory candidate even if array-layer limits are solved. Keep it as an experiment, not a presumed preferred architecture.
+
+### Evidence
+
+- W3C WebGPU limits and texture creation validation: https://www.w3.org/TR/webgpu/#limits
+- MDN GPUSupportedLimits (`maxTextureArrayLayers` default 256): https://developer.mozilla.org/en-US/docs/Web/API/GPUSupportedLimits
+- MDN GPUDevice.createTexture() validation: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/createTexture
