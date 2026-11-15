@@ -2338,3 +2338,50 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 - MediaMTX v1.21.3 global WriteQueueSize default: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
 - MediaMTX v1.21.3 per-reader ring buffer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
 - MediaMTX v1.21.3 stream reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+
+
+## 2026-11-15 — MediaMTX v1.21.3 exposes per-session frame-discard counters; recovery-point SEI is a supported random-access case
+
+**Scope:** Review of the v1.21.3 release notes, API/metrics documentation and a reported H.264 parameter-set issue. This is source/documentation research, not a runtime test. No local services, camera streams or configuration were changed.
+
+### Verified observability additions
+
+- MediaMTX v1.21.3 adds `outboundFramesDiscarded` to WebRTC session statistics. The Prometheus metric is exposed as `webrtc_sessions_outbound_frames_discarded`, labelled by WebRTC session ID and path.
+- The same release adds path-level `inboundFramesInError`, exposed as `paths_inbound_frames_in_error`. This is an input/processing error counter and must not be confused with a reader's outbound discard counter.
+- These values provide useful instrumentation for the two-reader PoC: identify the live and replay WebRTC sessions separately, record counter deltas during replay stalls, and correlate them with browser-side decoded-frame continuity and measured live latency.
+- A zero discard count is not proof of zero visible frame loss or zero latency impact. It only says that this particular MediaMTX counter did not increase; packet loss, browser decoder drops, display scheduling and camera-side gaps require separate measurement.
+
+### H.264 recovery-point SEI
+
+- The v1.21.3 release notes explicitly state that RTMP reader output, the fMP4 recorder and the stream unit remuxer now treat H.264 recovery-point SEI as a random-access point, rather than accepting only IDR frames in those paths.
+- This matters for sources that use I-slices plus a recovery-point SEI instead of periodic IDRs: the previous IDR-only handling could fail to prepend SPS/PPS and could leave the DTS extractor without SPS.
+- This is a targeted improvement to the named RTMP/recorder/remuxer paths. It does not establish that every WebRTC browser decoder or JudoReplayKit's proposed encoded-frame ring can start decoding at an arbitrary recovery-point SEI. The PoC must verify the exact recovery semantics and decoder output on captured source samples.
+- Therefore the PoC should record whether each random-access point is an IDR or a recovery-point SEI and test joining/recovery at both types. Do not label every I-slice as independently decodable.
+
+### Additional H.264 parameter-set risk — reported, not yet independently verified as fixed
+
+- MediaMTX issue #6269 reports a case in v1.21.1 where a stream carrying multiple H.264 PPS IDs becomes undecodable because only one SPS/PPS pair is retained and other in-band PPS units are removed during remuxing. The report includes a reproducible case where slices reference a PPS that is no longer present.
+- The report is a user issue, not a verified statement that every MediaMTX stream is affected. The v1.21.3 release notes reviewed for this entry do not identify a fix for #6269. I have not independently inspected the exact v1.21.3 source path for this case, so its status remains unresolved.
+- Add a bitstream-compatibility test that parses SPS/PPS IDs and slice PPS references from each intended camera source, then confirms the exact parameter sets survive MediaMTX and reach both readers and the recording. If a source emits multiple PPS IDs, test it explicitly before accepting MediaMTX remuxing as safe.
+
+### Required PoC checks
+
+1. Capture baseline values for each live/replay WebRTC session's outbound bytes, RTP packets and `outboundFramesDiscarded`, plus path-level `inboundFramesInError`.
+2. Stall only the replay reader; correlate MediaMTX counter deltas with browser-side frame sequence/timestamp gaps and live latency.
+3. Test IDR-based and recovery-point-SEI-based streams separately, including late reader join and recovery after an induced gap.
+4. Parse and validate SPS/PPS IDs and slice references before and after MediaMTX for every intended camera source.
+5. Keep separate acceptance criteria for server-side queue drops, RTP packet loss, decoder output gaps, displayed-frame continuity and live latency.
+
+### Assessment
+
+- MediaMTX v1.21.3 offers better observability for a replay-reader isolation PoC and improves handling of H.264 recovery-point SEI in specific RTMP/recording/remuxing paths.
+- These additions improve testability; they do not establish frame-accurate replay, instant keyframe recovery, or zero live impact.
+- Multiple-PPS handling remains an explicit source-compatibility question until tested against the exact v1.21.3 build and intended camera bitstreams.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 release notes: https://github.com/bluenviron/mediamtx/releases/tag/v1.21.3
+- MediaMTX metrics documentation: https://mediamtx.org/docs/features/metrics
+- MediaMTX v1.21.3 WebRTC session API definitions: https://pkg.go.dev/github.com/bluenviron/mediamtx/internal/defs@v1.21.3
+- MediaMTX issue #6269 (reported multiple-PPS failure): https://github.com/bluenviron/mediamtx/issues/6269
