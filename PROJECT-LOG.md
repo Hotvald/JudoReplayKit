@@ -3610,3 +3610,31 @@ This is currently the strongest new architecture candidate to test: LL-HLS provi
 - MP4Box.js BSD-3-Clause license: https://github.com/gpac/mp4box.js/blob/main/LICENSE
 - W3C AVC WebCodecs registration: AVCC samples, avcC description and IDR key chunks: https://www.w3.org/TR/webcodecs-avc-codec-registration/
 - W3C WebCodecs VideoDecoder output order, PTS and resource handling: https://www.w3.org/TR/webcodecs/
+## 2026-11-15 — LL-HLS segment PDT is anchored to the leading video track's random-access sample
+
+**Scope:** Exact source inspection of gohlslib v2.4.7 `muxer.go` and `muxer_segmenter.go`. This clarifies the HLS/PDT mapping proposed for the MP4Box.js/WebCodecs replay path; source-level only, no runtime PoC.
+
+### Verified source behaviour
+
+- gohlslib v2.4.7 chooses the first video track as the HLS muxer's leading track when a video track exists. Audio is not the leading track in a normal audio/video camera stream.
+- The H.264 fMP4 segmenter identifies random-access access units using `h264.IsRandomAccess()`, derives DTS using `h264.DTSExtractor`, and writes each MP4 sample with `PTSOffset = PTS - DTS`, `dts`, and the supplied NTP time.
+- The segmenter holds one sample in `fmp4NextSample` to calculate sample duration. When a new random-access video sample arrives after the minimum segment duration, it rotates the segment using that leading video sample's DTS and NTP. The IDR/random-access sample becomes the start of the new segment.
+- `muxer_stream` stores the segment's `startDTS` and `startNTP`; the LL-HLS playlist serializes `startNTP` as `EXT-X-PROGRAM-DATE-TIME`.
+- Therefore, for a normal H.264 video-leading LL-HLS stream, a segment's PDT is anchored to the NTP of its leading video random-access sample, not to an arbitrary first audio sample. The first video sample's PTS is recoverable from MP4Box.js sample `cts`; its DTS and PTSOffset are also available.
+
+### Consequence for HLS bookmark mapping
+
+- For each HLS segment, identify the first video random-access sample in decode order and retain its `cts`, `dts`, `timescale`, and the segment's `programDateTime`.
+- Candidate sample-to-NTP mapping is `NTP(sample) = segmentPDT + (sample.cts - firstRAP.cts) / timescale`. This uses presentation time, not DTS, and preserves B-frame composition offsets.
+- The live hls.js player's video `requestVideoFrameCallback().mediaTime` must be mapped to the same segment/video PTS range (prefer the video-track PTS range from hls.js parsing metadata, not a combined audio/video start time). Match the resulting PTS to MP4Box.js samples in the replay ring.
+- Verify the mapping across B-frame streams, audio/video offsets, segment rotation, LL-HLS parts, and the fMP4 archive. Do not assume `frag.startPTS` always equals the first RAP PTS if B-frame presentation reordering or track offsets are present.
+
+### Assessment
+
+This removes one uncertainty in the HLS timestamp design: MediaMTX/gohlslib deliberately uses the leading video track and starts each fMP4 segment at a video random-access sample, so the playlist PDT is a useful video-frame NTP anchor. The exact PTS mapping remains to be verified with real fMP4 parts and hls.js callback timestamps. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- gohlslib v2.4.7 leading-track selection (video preferred): https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer.go
+- gohlslib v2.4.7 H.264 DTS/PTSOffset and random-access segment rotation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- gohlslib v2.4.7 PDT playlist serialization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
