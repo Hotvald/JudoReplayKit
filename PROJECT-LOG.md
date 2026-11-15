@@ -2494,3 +2494,27 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 - MediaMTX v1.21.3 outgoing WebRTC RTP track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
 - MediaMTX v1.21.3 stream reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
 - MediaMTX v1.21.3 per-reader queue: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+
+## 2026-11-15 — MediaMTX prepends its stored H.264 parameter-set pair at random-access units
+
+**Scope:** Exact v1.21.3 source inspection of `internal/stream/unit_remuxer.go` and `internal/stream/format_updater.go`. Source-level finding only; no runtime test and no local changes.
+
+### Verified behaviour
+
+- The H.264 unit remuxer identifies random-access access units. When its output format has both an SPS and a PPS stored, it prepends that pair to the random-access access unit before passing it to readers.
+- The remuxer removes in-band SPS/PPS NAL units from the outgoing access unit and uses the format's stored pair instead. This helps a reader that joins before the next supported random-access unit: the next such unit can carry the currently stored SPS/PPS in-band.
+- The H.264 format updater scans incoming access units and stores a changed SPS and PPS in the format description. The implementation stores one SPS field and one PPS field, replacing the stored value when a different one is encountered; it does not maintain a map keyed by parameter-set ID.
+- Therefore this mechanism does not provide the previous GOP to a late reader and does not remove GOP wait. It only improves decoder initialization when a subsequent random-access access unit arrives and the stored parameter-set pair matches the slices.
+- This single-pair behaviour is consistent with the unresolved multiple-PPS compatibility concern documented above from upstream issue #6269. A stream whose slices reference a different PPS than the last stored one may still be undecodable after remuxing.
+
+### Consequence for the replay PoC
+
+- Measure the first random-access access unit delivered to a cold reader and confirm that its prepended SPS/PPS actually match the PPS IDs referenced by its slices.
+- For a continuously connected warm replay reader, retain the complete decoder dependency chain from a valid random-access point. Do not assume a newly opened decoder can start at an arbitrary P-frame or that MediaMTX's stored pair covers multi-PPS streams.
+- Keep the single-PPS case and multiple-PPS case as separate source compatibility tests.
+
+### Evidence
+
+- MediaMTX v1.21.3 H.264 unit remuxer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/unit_remuxer.go
+- MediaMTX v1.21.3 H.264 format updater: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/format_updater.go
+- Upstream multiple-PPS issue: https://github.com/bluenviron/mediamtx/issues/6269
