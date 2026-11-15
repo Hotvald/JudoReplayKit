@@ -3676,3 +3676,40 @@ This does not invalidate the HLS/fMP4 → MP4Box.js → WebCodecs candidate, but
 - mediacommon H.264 `IsRandomAccess()` includes recovery-point SEI: https://github.com/bluenviron/mediacommon/blob/059ab2e28705f0c8cac17465bf969ee39d9ba73d/pkg/codecs/h264/is_random_access.go
 - gohlslib v2.4.7 H.264 random-access and sync-sample logic: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
 - W3C AVC WebCodecs registration, IDR requirement for `type: 'key'`: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+## 2026-11-15 — HLS fMP4 codec configuration is initialized once; midstream SPS/PPS changes require explicit reinitialization proof
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 HLS muxer instance creation and gohlslib v2.4.7 H.264 sample-entry initialization. Source-level risk; no runtime PoC.
+
+### Verified source behaviour
+
+- MediaMTX v1.21.3 creates an HLS `muxerInstance` with a `stream.Reader`, calls `hls.FromStream()` using the stream's current original/output descriptions, constructs gohlslib tracks from those descriptions, starts the muxer and registers the reader. The HLS muxer instance owns one gohlslib muxer and one reader for the path.
+- gohlslib v2.4.7 H.264 track initialization collects SPS/PPS from incoming access units only while the initialization file has not yet been written. Once the init file is present, its H.264 sample entry/`avcC` is not automatically rebuilt from a later SPS/PPS change by that code path.
+- MediaMTX's H.264 stream remuxer separately stores one current SPS and one current PPS and can prepend them at random-access points, but this does not by itself prove that an already-written HLS init segment's `avcC` is updated or that a new `EXT-X-MAP` is emitted.
+- The inspected HLS muxer instance setup is based on a snapshot of the stream descriptions at creation. The reviewed code does not establish that an in-place SPS/PPS/profile/resolution change during an active HLS muxer automatically destroys/recreates the muxer or emits a new initialization segment.
+
+### Consequences for HLS/MP4Box/WebCodecs
+
+- A new SPS/PPS or profile/level/resolution configuration must be treated as a codec-configuration epoch change. The replay worker must not continue decoding new samples with an old `avcC` description.
+- Before accepting the HLS/MP4Box/WebCodecs path, verify whether MediaMTX v1.21.3 responds to midstream SPS/PPS changes by restarting the HLS muxer, emitting a new `EXT-X-MAP` and discontinuity, or continuing with stale initialization metadata.
+- If a new init segment is emitted, the worker must reset MP4Box parsing state as needed, create a new decoder configuration epoch and resume only from a valid IDR with matching SPS/PPS.
+- If no new init segment is emitted, the app must reject the changed stream/mark the camera unavailable for replay rather than silently feeding mismatched samples to WebCodecs.
+- Camera reconnect is a separate case: a new HLS muxer/init segment is expected and must start a new source/codec epoch.
+
+### Required PoC tests
+
+1. Start a camera stream and capture the initial HLS init segment and `avcC`.
+2. Change resolution/profile/SPS/PPS without disconnecting the RTMP publisher if the source permits it; observe MediaMTX HLS muxer lifecycle, playlist discontinuity, `EXT-X-MAP` URI and new init bytes.
+3. Change PPS ID while retaining the same resolution and profile; inspect whether the new SPS/PPS is present in the HLS init segment and every IDR sample.
+4. Reconnect the camera and verify that a new muxer/init segment and codec epoch are visible to the replay worker.
+5. Confirm MP4Box.js and WebCodecs are reconfigured only at explicit codec epochs and that bookmarks do not cross the epoch boundary without a new mapping.
+
+### Assessment
+
+The HLS/fMP4 → MP4Box.js → WebCodecs candidate still looks promising, but it has a new hard gate: midstream codec-configuration changes must produce a matching new init segment or a controlled muxer restart. The current source review does not prove this behaviour. This risk joins the existing multiple-PPS and IDR/recovery-point tests. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS muxer instance and one-time stream-description setup: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer_instance.go
+- MediaMTX v1.21.3 HLS track creation from stream descriptions: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- gohlslib v2.4.7 H.264 SPS/PPS handling and init-file guard: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
+- MediaMTX v1.21.3 stored H.264 parameter-set behaviour: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/format_updater.go
