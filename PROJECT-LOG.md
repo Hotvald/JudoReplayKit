@@ -1745,3 +1745,28 @@ Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and a
 **Next review:** Inspect the Docker/base-image and toolchain inputs for this exact job, then build a component-by-component licence/notice inventory for the enabled external libraries. Do not extract or execute the candidate archive until the remaining provenance and licence review is complete. No MediaMTX server was started. No production or Rev.8 files, services, firewall rules, ports, or recordings were changed.
 
 **Overall status:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.
+
+
+## 2026-11-15 — FFmpeg build-environment and toolchain review
+
+**Source:** Exact scheduled GitHub Actions run and target-image build job for the candidate release, plus repository files read at the workflow run's own source commit. Read-only public-source review; no local extraction or execution.
+
+- Exact FFmpeg-Builds workflow source revision for run `43593293993`: repository commit `c9fe5114060e507409f7ee07edfd82efaf25d767` (branch `master`, scheduled run on 2026-11-14). This is the build-recipe revision, distinct from the FFmpeg source commit `d838f9f9aeb0e09b4d068e2af20a46a12640696f`.
+- The exact target-variant image job was **Build target-variant image (ubuntu-latest, win64, lgpl 9.0)**, job ID `132443787376`; it completed successfully. Its runner log identifies Ubuntu 24.04.
+- The variant image build used Buildx with `provenance: false` and `sbom: false`. The generated image was tagged `ghcr.io/ffmpeg-builds/ffmpeg-builds/win64-lgpl-9.0:latest-x86`; the FFmpeg build job subsequently ran the mutable `:latest` tag. This makes the exact image digest used by the FFmpeg build important; the available job excerpt records the image pull but does not yet conclusively tie a digest to the later `docker run`.
+- The variant image build log shows its base image resolved to `ghcr.io/ffmpeg-builds/ffmpeg-builds/base-win64:latest@sha256:fc03b671afa7c5154d2efa526b92f290d937fcb0e94daf13be4f7a7a76c702f9`.
+- At the exact recipe commit, `images/base/Dockerfile` starts from the mutable `ubuntu:26.04` tag and installs a broad toolset through apt, then installs Meson via pip and Rust via rustup. These package sources are not pinned to immutable package versions in that Dockerfile.
+- At the exact recipe commit, `images/base-win64/Dockerfile` clones crosstool-NG from its default Git branch without an explicit commit checkout, then builds the Windows cross-toolchain using `ct-ng-config`. The checked-in config identifies crosstool-NG configuration version `1.29.0.36_fbb6372`, GCC `16.2.0`, Binutils `2.47`, and MinGW-w64 `v14.0.0`. It enables SHA-512 download-digest verification for crosstool-NG downloads but does not enable upstream signature verification. The Dockerfile also installs Wine through apt and adds the Rust Windows GNU target.
+- The FFmpeg build job itself runs on `ubuntu-latest` (the job log reports Ubuntu 24.04), pulls the variant image by mutable `:latest` tag, and runs `build.sh` inside it. The workflow uses current action major tags (for example `actions/checkout@v7`, `docker/build-push-action@v7`) rather than immutable action commit references in the workflow source. The runner log records resolved action SHAs for that run, which are useful run-specific evidence but are not pinned by the workflow file.
+- These observations do not prove that the resulting FFmpeg binary is unsafe or defective. They do show that the release build is not fully reproducible from the visible workflow alone: mutable image tags, unpinned apt/pip/rustup inputs, and the unpinned crosstool-NG clone require additional run-specific evidence to reconstruct the complete toolchain. The disabled image provenance/SBOM settings also leave a documentation gap.
+- Relevant exact-run links:
+  - Workflow run: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993
+  - Variant image job: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132443787376
+  - FFmpeg build job: https://github.com/FFmpeg-Builds/FFmpeg-Builds/actions/runs/43593293993/job/132445937945
+  - Recipe source commit: https://github.com/FFmpeg-Builds/FFmpeg-Builds/commit/c9fe5114060e507409f7ee07edfd82efaf25d767
+
+**Assessment:** Build recipe and toolchain details are now better identified, but provenance is still not verified and full reproducibility is not established. Do not treat the FFmpeg archive as approved for distribution or use in JudoReplayKit yet.
+
+**Next review:** Build a dependency inventory from the exact generated variant recipe/build log and its downloaded source archives, mapping each enabled/linked component to version, licence, required notices/source obligations, and whether it is actually present in the packaged executables. Then request an independent review from another AI (DeepSeek or Mistral) against the evidence, explicitly asking it to challenge both the licensing analysis and the provenance/reproducibility conclusions. Do not extract or execute the FFmpeg archive before that review gate.
+
+**Overall status:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.
