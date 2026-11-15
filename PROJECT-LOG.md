@@ -2662,3 +2662,45 @@ Three different resource models now need direct comparison: retaining decoder-ba
 - W3C WebCodecs VideoFrame copy and layout methods: https://www.w3.org/TR/webcodecs/#videoframe-interface
 - MDN VideoFrame.copyTo(): https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/copyTo
 - Chromium VA-API/Linux diagnostics: https://github.com/chromium/chromium/blob/main/docs/gpu/vaapi.md
+## 2026-11-15 — WebGPU replay rendering: external textures versus persistent GPU frame cache
+
+**Scope:** Review of current W3C WebGPU/WebCodecs specifications and MDN API documentation. Research only; no runtime PoC, local changes, or architecture decision.
+
+### Verified findings
+
+- `GPUDevice.importExternalTexture({source: VideoFrame})` creates a sampleable `GPUExternalTexture` snapshot. The WebGPU specification says it may be implemented without copying the source, but this is implementation-dependent; ownership may be shared with the decoder or exclusive. It is not a guaranteed zero-copy contract.
+- A `GPUExternalTexture` created from a `VideoFrame` remains valid only while the source VideoFrame remains open. Closing the VideoFrame expires the external texture. If the external texture remains referenced, it can keep the VideoFrame and its media resource alive. The WebGPU specification explicitly warns that failing to close VideoFrames can stall the decoder.
+- `GPUExternalTexture` is a sampleable external-video texture, not a general persistent application-owned pixel store. It is intended for GPU sampling/rendering; its internal representation is implementation-defined and may contain multiple planes and color-conversion metadata.
+- `GPUQueue.copyExternalImageToTexture()` accepts a VideoFrame source and copies a snapshot into an application-created GPUTexture. This creates a persistent application-owned GPU copy that can outlive the source VideoFrame, allowing the original decoder-backed VideoFrame to be closed after the copy has completed/been safely queued according to API semantics. The GPUTexture still consumes GPU memory; this is a transfer of resource ownership, not elimination of storage cost.
+- MDN currently marks `GPUDevice.importExternalTexture()` and `GPUQueue.copyExternalImageToTexture()` as limited availability and secure-context-only. WebGPU must therefore be an optional fast path with feature detection and a non-WebGPU fallback, not a mandatory browser baseline.
+- WebGPU's external texture and copy APIs can be exposed in workers on supporting implementations. Chrome's WebCodecs guidance recommends moving per-frame processing off the main thread and supports transferring VideoFrame objects to workers; OffscreenCanvas can also move rendering off the main thread.
+- A persistent RGBA8 GPU texture ring at 1920x1080 would require approximately 8,294,400 bytes per frame. At 30 fps for 15 seconds (450 frames), this is approximately 3.73 GB per camera and 7.46 GB for two cameras, before alignment, allocation overhead, additional render targets or metadata. At 1280x720 it is approximately 3.69 MB/frame, 1.66 GB per camera and 3.32 GB for two cameras. These are arithmetic estimates for one 4-byte-per-pixel RGBA8 texture per frame, not measured browser allocations. Alternative planar formats or texture-array layouts may change the result, but must be validated rather than assumed.
+
+### Consequences for JudoReplayKit
+
+1. Separate the display path from the retention path. `importExternalTexture()` may be a fast way to display the currently selected VideoFrame, but retaining the source frame to preserve that external texture can pin decoder resources. It is not a free long-term replay cache.
+2. Test a persistent GPUTexture ring as a distinct candidate: decode into VideoFrame, copy each selected output into a preallocated GPU texture slot using `copyExternalImageToTexture()`, then promptly close the original VideoFrame. This may release decoder surfaces while keeping the cached image on GPU for fast display. Measure copy throughput, GPU memory, render latency, texture allocation limits and behavior under memory pressure.
+3. Do not assume the persistent GPU texture ring is memory-cheaper than a CPU pixel ring. A straightforward RGBA8 cache is larger than tightly packed 8-bit 4:2:0/NV12 estimates by about 2.67x. It may be useful for rendering speed but can be prohibitive for 15 seconds of two-camera full-resolution history.
+4. Compare persistent GPU textures against `VideoFrame.copyTo()` into CPU buffers and a compressed H.264 ring. The CPU copy may free decoder resources at the cost of CPU/system memory and later upload; GPU copy may avoid CPU round-trip but consumes dedicated/shared GPU memory.
+5. Because WebGPU APIs are not Baseline and require a secure context, test the actual application origin. `localhost` is generally treated as a secure context, but an HTTP LAN-IP or hostname deployment must not be presumed secure. If the application must be opened remotely over the LAN, plan HTTPS or a non-WebGPU fallback.
+6. Keep exact frame stepping and timestamps independent of rendering API. WebGPU should only render the already selected frame; it must not become the source of frame order or time.
+
+### Updated buffer/render PoC matrix
+
+- A: retain VideoFrames and render selected frames via WebGPU `importExternalTexture()`; measure decoder-surface retention and stall thresholds.
+- B: copy VideoFrame pixels via `VideoFrame.copyTo()` into bounded CPU buffers, close source VideoFrames, then render selected frames through the chosen browser path.
+- C: copy VideoFrames into preallocated persistent GPUTexture slots via `copyExternalImageToTexture()`, close source VideoFrames, and render from those GPU textures.
+- D: compressed H.264 ring plus short decoded hot window; decode older positions from preceding keyframe and measure cold seek latency.
+- Run all candidates at target resolution/fps with two cameras, two concurrent replay views, 5/15/30-second windows, and strict memory budgets. Record GPU dedicated/shared memory, system RAM, decoder stalls, decode queue depth, copy throughput, render latency, first-display latency, exact step correctness, live latency and recording continuity.
+
+### Assessment
+
+WebGPU offers a potentially efficient display path and a persistent GPUTexture copy could decouple cached images from decoder-backed VideoFrames. However, it does not provide a guaranteed zero-copy long-term store; persistent textures still consume substantial GPU memory, and WebGPU availability/security-context requirements make it an optional acceleration path. The strongest design remains a measured comparison of CPU pixel cache, GPU texture cache, retained VideoFrames and compressed-history/hot-window hybrid. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebGPU external textures and import lifecycle: https://www.w3.org/TR/webgpu/#external-textures
+- W3C WebCodecs system resources: https://www.w3.org/TR/webcodecs/
+- MDN `GPUQueue.copyExternalImageToTexture()`: https://developer.mozilla.org/en-US/docs/Web/API/GPUQueue/copyExternalImageToTexture
+- MDN `GPUDevice.importExternalTexture()`: https://developer.mozilla.org/en-US/docs/Web/API/GPUDevice/importExternalTexture
+- MDN WebCodecs worker and rendering guidance: https://developer.chrome.com/docs/web-platform/best-practices/webcodecs
