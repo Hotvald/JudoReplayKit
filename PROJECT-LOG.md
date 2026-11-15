@@ -1358,3 +1358,76 @@ The following points are already substantially covered or resolved in Draft 0.4 
 - The next planned step is the independent **DeepSeek critical review**. Give DeepSeek both the authoritative Draft 0.4 and Gemini's complete response, and explicitly ask it to verify each Gemini claim against Draft 0.4, identify any new risks, and distinguish confirmed gaps from items already covered.
 - Mistral may then perform an additional implementation/dependency/licensing review.
 - No code, architecture, requirement or local file was changed as a result of this Gemini review. Protected Rev.8/production environments remain untouched.
+
+
+## 2026-11-15 — Rev.9 consolidated AI architecture-review checkpoint
+
+**Source:** Owner supplied the original Gemini and DeepSeek reviews and the subsequent Mistral Rev.9 technical review in the project conversation. This entry records a preliminary cross-review synthesis by ChatGPT. It is an attributed review record, not an owner decision and not a claim that any proposed architecture or PoC has been technically validated.
+
+### Scope and baseline
+
+- The authoritative product baseline remains **REV.9 REQUIREMENTS DRAFT 0.4**, approved by the owner on 2026-11-08.
+- The Decisions document and this Project Log remain supplementary records.
+- No product requirement is changed, weakened or reopened by this review.
+- No architecture, programming language, media server, codec/container, protocol, database, browser pipeline, installer or dependency is approved by this entry.
+- The older Repair 1 rev.4, Stage 1 and Rev.5 Fix A–F workstreams are out of scope.
+
+### Comparative position of the three reviews
+
+| Topic | Gemini | DeepSeek | Mistral | Preliminary synthesis |
+|---|---|---|---|---|
+| Overall direction | Presented A/B/C and strongly favoured native architecture B, subject to PoCs | Conditional GO for isolated PoCs; introduced/refined hybrid architecture D as promising | Conditional GO for isolated PoCs; favoured D as the strongest candidate, not approved | There is convergence on PoC-first and no-go for full implementation. D is a candidate, not a decision. |
+| Immediate replay during active recording | Considered feasible with MediaMTX/fMP4 and native growing-file playback, but proof needed | Flagged active fMP4 parts, finalization and live-edge handling as high risk | Considered structurally possible, but requires own implementation and proof; prior Rev.8 observations are not a Rev.9 proof | Highest-priority feasibility test. Reading a growing file or listing a recording is not equivalent to fast, reliable user-visible replay. |
+| Exact decoded-frame stepping | Identified reverse stepping as difficult; initially treated native player capability too optimistically | Warned libmpv alone does not guarantee exact reverse stepping; proposed explicit frame cache | Also challenged libmpv frame-back-step guarantees; favoured explicit cache | Strong agreement that ordinary player controls cannot be assumed to meet the requirement. Must prove adjacent decoded-frame identity in both directions, including after seek. |
+| Browser/WebCodecs | Proposed advanced web architecture A using MSE/WebCodecs | Retained WebCodecs as a possible route but unproven | Highlighted WebCodecs secure-context constraints for LAN-IP HTTP access | Keep A in comparison until a targeted localhost-versus-LAN-origin test establishes the actual supported access path and fallback. |
+| Two-camera timing | Discussed ingest timestamps and alignment limitations | Emphasized ingest arrival is not capture time; recommended shared-event tests and uncertainty reporting | Emphasized measured timing and honest uncertainty | All agree that timing evidence and capture-time claims must be distinguished. Use repeated shared visual events to measure offset and drift. |
+| Replay/recording isolation | Raised read/write contention and priority concerns | Warned that OS scheduling alone cannot guarantee isolation | Noted ionice is not available on Windows; recommended architectural isolation | Isolation must be demonstrated under simultaneous dual-camera ingest, recording, replay and slow motion on Windows and Linux. |
+| Storage safety | Discussed controlled close/finalization and reserve | Challenged fixed reserve assumptions and automatic recovery claims | Highlighted MediaMTX recordDeleteAfter and the need to disable automatic deletion | Draft 0.4 remains authoritative: no auto-delete; test-derived reserve; controlled stop; preserve prior recordings. Verify actual defaults/configuration and recovery behavior. |
+| Licensing/platform | Raised FFmpeg licensing/build configuration | Raised Qt/PySide/PyQt and FFmpeg distribution obligations | Added browser codec/HEVC and Windows/Linux distribution concerns | Perform a concrete dependency/build/redistribution audit before selecting components. No generic “free” label is sufficient evidence. |
+| Architecture candidate | B (native) | D (hybrid/native with explicit frame cache) | D (hybrid/native with explicit frame cache) | B and D may overlap: treat D as a refinement/pattern within a native/hybrid design, not necessarily a wholly separate architecture. A remains an alternative; C remains lower-priority but not disproven. |
+
+### Consolidated technical risk register
+
+1. **Live-edge replay while recording is active — critical / unproven.** A recording list, a growing file, or an HTTP 200 response does not prove that the operator can immediately decode and display the requested interval while the writer continues. Test the real user-visible path, both cameras, all look-back choices, segment/part boundaries and continued recording.
+2. **Exact backward and forward frame stepping — critical / unproven.** A player API name or successful seek is not proof of exactly one adjacent decoded frame per action. Use visible unique frame identities and test both directions, repeated actions, seek/pause/resume, GOP variations and variable frame rate where supported.
+3. **Two-camera alignment and drift — high / unproven.** Establish what timestamps each source and pipeline exposes. Measure initial offset, drift and uncertainty using repeated shared visual events. Do not label ingest-arrival time as capture time.
+4. **Isolation under load — high / unproven.** Verify that replay, frame-cache work and slow motion do not interrupt camera ingest, continuous recording, live presentation or Live Delay.
+5. **Storage exhaustion and segment integrity — high / unproven.** Test on disposable storage only. Establish a measured safety reserve and prove controlled stop/preservation without deletion.
+6. **LAN browser security/codec matrix — high / unproven.** Test the actual intended Windows/Linux browsers and origins, including localhost and LAN-IP access. Confirm codec availability without requiring paid components.
+7. **Dependency and redistribution licensing — high / unproven.** Audit exact binaries, build flags, linked libraries, codecs, Qt bindings and distribution obligations for the chosen package.
+
+### Preliminary architecture disposition
+
+- **A — Advanced web/MSE/WebCodecs:** retain as a candidate pending a focused secure-context, codec and exact-frame prototype.
+- **B — Native media playback/framework:** retain as a candidate, but do not assume libmpv alone satisfies exact backward stepping or active-growing-recording playback.
+- **C — Backend frame extraction/delivery:** lower-priority candidate due likely CPU, bandwidth and latency costs; not formally rejected without comparative measurement.
+- **D — Native/hybrid with explicit decoded-frame cache:** currently the strongest working hypothesis for exact frame control, but it introduces implementation and maintenance responsibility and has not been proven. Do not lock it.
+
+### Recommended PoC order
+
+1. **PoC 1 — Live-edge replay while recording continues.** Measure button-to-first-usable-frame latency; test both cameras, all required look-back intervals, active parts/segment boundaries, partial availability and uninterrupted recording.
+2. **PoC 2 — Exact decoded-frame stepping.** Compare the viable browser and native approaches on identical numbered footage; prove exactly one adjacent frame per action in both directions, including after seek and with representative GOP/frame-rate conditions.
+3. **PoC 3 — Dual-camera timing.** Repeated shared visual events at start and over a sustained run; report offset, drift and uncertainty and identify timestamp provenance.
+4. **PoC 4 — Isolation/performance.** Simultaneous dual ingest/recording, live display, Live Delay, replay and slow motion; measure continuity, latency, resource use and dropped frames.
+5. **PoC 5 — Storage safety.** Disposable test volume only; low-space warning, controlled stop, interrupted process and recovery; confirm no deletion and preservation of completed recordings.
+
+Pass/fail thresholds not already defined by Draft 0.4 must be established from baseline measurements and approved by the owner before being treated as acceptance criteria. No arbitrary numeric thresholds are adopted here.
+
+### Next independent review round
+
+The owner intends to give Gemini and DeepSeek the same consolidated comparison brief and request that each independently:
+- Verify or challenge the comparison above against the full original source materials.
+- Identify any misrepresentation, omitted claim, unsupported conclusion or disagreement.
+- Evaluate A–D using the same requirements and PoC order.
+- State which conclusions are evidence-backed versus hypotheses.
+- Return corrections and additions without changing Draft 0.4 or selecting an architecture.
+
+The two reviewers must receive the same prompt and the same five source materials (Draft 0.4, Decisions, Project Log, Gemini original report, DeepSeek original report), plus the Mistral report and this comparison. Their responses are advisory and will be reconciled before owner approval.
+
+### Status and safety
+
+- **Current verdict:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock and full implementation until critical feasibility evidence exists.
+- This is a technical review status, not approval to weaken or alter any requirement.
+- No application code, installer, service, configuration or local environment was changed by this review.
+- Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected.
+- Rev.9 work remains isolated in `C:\\JudoReplayKit_Rev9_Dev`; this entry does not claim that local workspace was inspected.
