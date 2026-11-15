@@ -3480,3 +3480,55 @@ LL-HLS/hls.js is now a strong candidate for the visible live view and all five L
 - MediaMTX v1.21.3 HLS defaults: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
 - gohlslib v2.4.7 PART-HOLD-BACK calculation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
 - hls.js live latency API: https://github.com/video-dev/hls.js/blob/master/docs/API.md
+## 2026-11-15 — Alternative replay PoC: independent HLS/MSE player over an extended MediaMTX segment window
+
+**Scope:** Feasibility analysis based on MediaMTX v1.21.3 HLS playlist retention, gohlslib low-latency segments, and hls.js independent player/start-position APIs. Alternative only; no runtime PoC or architecture decision.
+
+### Candidate topology
+
+- Keep the visible live HLS player independent.
+- Increase MediaMTX `hlsSegmentCount` from the default 7 to a value that retains the required 5–30-second history plus live-delay margin (the exact count must be based on actual segment durations, because segments rotate on random-access points and can exceed the nominal 1-second target).
+- Create a second hls.js instance and `<video>` element for replay. It uses the same MediaMTX HLS path/playlist but an independent MediaSource and playback timeline. The replay player can start at a media time derived from the bookmark's NTP/PDT mapping and can be paused/seeked without changing the live player.
+- The HLS playlist/segments are the compressed history store; no additional WebRTC replay reader, encoded transform or custom H.264 ring is required for this variant.
+- Use `requestVideoFrameCallback()` on the replay video to record actual output `mediaTime` values. Build a compact per-camera frame-PTS index while the player is warm. When stepping, seek to the next/previous known PTS and verify the actual output PTS returned by the next callback.
+
+### Potential advantages
+
+- Uses MediaMTX's existing HLS muxer and compressed fMP4 segments; no custom encoded-frame copy/ring is needed.
+- Live and replay use independent HTML video elements/MediaSource instances, so replay pause/seek does not alter the live player's position.
+- MediaMTX HLS ProgramDateTime and hls.js fragment PTS metadata can map the selected frame to the same server NTP timeline used by the archive.
+- Browser-native MSE/H.264 decoding may use platform hardware acceleration without a separate WebCodecs decoder configuration path.
+- A 30–40-second compressed HLS window is likely much smaller than a full decoded-frame cache. At an illustrative 8 Mbit/s, 30 seconds is about 30 MB per camera before container/metadata overhead; actual bitrate and segment sizes must be measured.
+
+### Risks and unresolved requirements
+
+- MediaMTX's default 7-segment HLS playlist is too short for 15–30-second replay. The configured segment count must be increased, and actual retained duration must be verified across long GOPs, reconnects and discontinuities.
+- The HLS player may not expose every decoded frame through `requestVideoFrameCallback()` if the decoder/compositor drops frames under load. A timestamp index built only from displayed callbacks may omit encoded frames needed for exact frame-step.
+- Setting `video.currentTime` to a previously recorded PTS may seek from a preceding keyframe and decode forward. It may be fast, but exact adjacent-frame stepping in both directions is not guaranteed by the HTML media API and must be measured.
+- The browser's MSE decoder does not provide a direct public `stepFrame()` method. `currentTime` seeking plus callback verification is an experimental approach; if the actual output PTS differs from the target, repeated correction may add latency.
+- A replay player that is paused for a long review may become far behind the moving live edge. It must preserve the paused buffer while the match continues, then reset/re-warm to the configured replay lookback on close. HLS.js latency catch-up and MSE buffer eviction must not silently jump the visible replay frame.
+- Two HLS players per camera (live plus replay) still consume decoder/GPU resources. With two cameras, measure four simultaneous video pipelines and the effect on live/recording.
+- Low-Latency HLS playlist PDT tags are only present on the latest two segments in the MediaMTX default variant; the app must maintain its own rolling PDT/PTS map and must not rely on the current playlist alone.
+
+### Required PoC comparison
+
+Compare this HLS/MSE replay variant against the direct WebRTC encoded ring + WebCodecs decoder:
+
+1. Two live HLS players plus two independent replay HLS players; set `hlsSegmentCount` to retain at least 30 seconds plus margin.
+2. Replay requests at random offsets (5/15/30 seconds) while the live match continues. Measure button-to-first-displayed-frame and verify that live position never changes.
+3. Build a frame PTS index during warm playback, then test exact next/previous frame stepping and repeated rapid stepping. Compare every output `mediaTime` against the requested PTS.
+4. Pause replay for 5, 15 and 30 seconds while the source continues. Verify the paused frame remains stable and the replay can recover to the configured lookback without a visible jump.
+5. Stress both cameras, target resolution/fps, HLS playlist reloads, segment eviction, reconnects, B-frame/no-B-frame sources, MSE quota errors and browser hardware decode.
+6. Compare CPU/GPU, memory, MSE buffer ranges, decoded frames, dropped/repeated frames, first-frame latency, exact frame-step and live/recording continuity.
+
+### Assessment
+
+An independent HLS/MSE replay player is a credible lower-complexity fallback because MediaMTX already stores a rolling compressed segment window and HLS playback is separate from the live player. It may meet immediate replay with a warm player and short GOPs, but exact frame-step and rapid seek behaviour are not guaranteed by the browser media API. The direct WebRTC encoded ring + WebCodecs path remains the stronger candidate for exact frame control; HLS/MSE should be tested as a simpler comparator before committing to custom decoding. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS defaults and segment-count configuration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+- MediaMTX v1.21.3 HLS muxer path: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
+- gohlslib v2.4.7 low-latency playlist/segment window: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- hls.js start-position and latency control: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/controller/base-stream-controller.ts
+- hls.js live latency controller behaviour: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/controller/latency-controller.ts
