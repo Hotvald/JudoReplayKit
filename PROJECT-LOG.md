@@ -2828,3 +2828,34 @@ This is a promising refinement: a replay-only WebRTC connection could deliver en
 - MDN RTCEncodedVideoFrame: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame
 - MDN receiver-side encoded transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
 - MDN deprecated/non-standard RTCEncodedVideoFrame.timestamp: https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/timestamp
+## 2026-11-15 — H.264 Annex B requirements for direct WebRTC-to-WebCodecs replay
+
+**Scope:** Review of the W3C AVC (H.264) WebCodecs registration and WebRTC Encoded Transform receiver semantics. The AVC registration is a Group Note Draft/non-normative document; findings are interoperability requirements to test, not a guarantee of implementation support. No runtime PoC or local changes.
+
+### Verified registration details
+
+- The W3C AVC WebCodecs registration expects each EncodedVideoChunk to contain one H.264 access unit (one primary coded picture). For `avc` format, the chunk data is length-prefixed/canonical and `VideoDecoderConfig.description` contains an AVCDecoderConfigurationRecord. For `annexb` format, chunk data is Annex B byte-stream data.
+- If `VideoDecoderConfig.description` is absent, the registration says the H.264 bitstream is assumed to be Annex B. This matches the format expected in many live-streaming pipelines, but must be confirmed from the actual MediaMTX receiver transform bytes.
+- For Annex B, a chunk marked `key` is expected to contain an IDR picture and all parameter sets needed to decode its video NAL units. Merely marking an arbitrary intra-coded or recovery-point frame as `key` is not sufficient unless it meets the registration's random-access expectations.
+- For `avc` format, the parameter sets are supplied through the decoder configuration description instead of the key chunk. The two modes must not be mixed: do not pass length-prefixed AVCC chunks with no description, or Annex B chunks with an incompatible AVCDecoderConfigurationRecord.
+- The W3C registration explicitly states that WebCodecs implementations are not required to support AVC/H.264. H.264 support must be checked with `VideoDecoder.isConfigSupported()` and verified by decoding the actual camera stream.
+- The W3C WebRTC Encoded Transform specification places receiver transforms between depacketization and the native decoder. The receiver transform output must preserve decode order; it may drop frames but may not reorder them. H.264 packetizer examples and expectations use Annex B start-code separated NAL units, but exact access-unit framing must be inspected in the actual browser/MediaMTX path.
+
+### Implications for the direct replay worker
+
+1. Prefer testing Annex B first for the live WebRTC path, with no `VideoDecoderConfig.description`, provided the transform bytes are proven to be complete Annex B access units.
+2. Parse the SPS to derive the actual H.264 profile/compatibility/level codec string; do not hardcode a codec string from a guessed camera profile. Run `VideoDecoder.isConfigSupported()` for the derived configuration and then decode a real IDR-to-delta sequence.
+3. At each random-access key chunk, verify that it contains the actual SPS/PPS set(s) required by all slice NAL units in that access unit. MediaMTX v1.21.3's inspected remuxer prepends one stored SPS/PPS pair at random-access points; this may be insufficient for multiple-PPS streams and remains a compatibility gate.
+4. Record whether `RTCEncodedVideoFrame.type === 'key'` actually coincides with an IDR access unit for the source. Parse NAL unit types and slice PPS references; do not trust only the metadata key flag.
+5. If the source or MediaMTX output does not provide a valid Annex B key access unit with all required parameter sets, either correct the upstream stream configuration/format path or reject that path for instant replay. Do not silently fabricate a key chunk.
+6. Repeat with camera reconnects, MediaMTX restart, SPS/PPS changes, multiple PPS, long GOP, and the first key chunk received after a new replay reader joins.
+
+### Assessment
+
+The direct WebRTC-to-WebCodecs path has a clear standards-compatible bitstream contract, but it is strict: Annex B key chunks must be true IDR access units carrying every parameter set required for their slices. This directly intersects MediaMTX v1.21.3's one-stored-SPS/one-stored-PPS behaviour and the unresolved multiple-PPS issue. The path remains promising only if the actual camera bitstream passes this gate. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C AVC (H.264) WebCodecs Registration, 8 June 2026: https://www.w3.org/TR/webcodecs-avc-codec-registration/
+- W3C WebRTC Encoded Transform receiver pipeline: https://www.w3.org/TR/webrtc-encoded-transform/
+- W3C WebCodecs codec registry: https://www.w3.org/TR/webcodecs-codec-registry/
