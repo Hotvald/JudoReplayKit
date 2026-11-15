@@ -2119,3 +2119,54 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - MediaMTX v1.21.3 peer connection: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/peer_connection.go
 - MediaMTX v1.21.3 inbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/inbound_track.go
 - MediaMTX v1.21.3 outbound track: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/outbound_track.go
+
+
+## 2026-11-15 — WebCodecs decoder queue, frame lifetime and presentation-order constraints
+
+**Scope:** Review of the current W3C WebCodecs specification and MDN implementation guidance. No local files or running services were changed.
+
+### Findings
+
+- WebCodecs VideoDecoder is asynchronous. decode() enqueues work; output VideoFrames arrive later through the output callback. The application must not assume a decode() call means the corresponding frame is immediately available.
+- The decoder's decodeQueueSize exposes pending decode requests. It must be monitored and bounded; an unbounded input queue can accumulate work and latency. The replay path needs explicit backpressure and a policy for overload that never blocks or delays the original WebRTC live path.
+- The W3C specification requires VideoDecoder outputs in presentation order. Implementations may internally reorder decoded pictures to achieve this. This is important for H.264 streams containing B-frames: the encoded access units may be supplied in decode order, while decoded output is delivered in display/presentation order.
+- EncodedVideoChunk.timestamp is a presentation timestamp in microseconds, and WebCodecs carries it through to the corresponding VideoFrame. The timestamp origin is media-defined and not guaranteed to be shared across separate streams. RTP timestamp metadata is a separate 90 kHz stream-clock value; it must be unwrapped and mapped deliberately rather than copied blindly as if it were already a microsecond presentation timestamp.
+- RTCEncodedVideoFrame metadata includes RTP timestamp and SSRC/synchronization source. RTP timestamp identifies the sampling instant in that stream; it is not itself a shared cross-camera wall clock. The browser transform's receiveTime and captureTime have different semantics as documented in the earlier timestamp entry.
+- VideoDecoder.flush() is not a periodic "make frames appear now" operation. The WebCodecs specification sets the decoder's key-chunk-required state when flush() is called. Subsequent decode input must begin with a key chunk. Calling flush() during normal continuous replay-buffer decoding can therefore force a keyframe restart and disrupt the rolling decoder.
+- reset() synchronously aborts pending work and clears queued control messages; it is not a harmless pause or seek. After reset/reconfigure, decoding must restart from a keyframe. A decoder error closes the decoder; recovery requires a new decoder instance configured again and a valid keyframe.
+- VideoFrame resources are not ordinary small JS objects. W3C and MDN advise explicitly closing frames when no longer needed; retaining many frames can exhaust GPU/media resources and stall or crash the application. A frame cache therefore needs strict count/age/byte limits, deterministic ownership, and close() on eviction. Clone() shares the underlying media resource rather than creating a free independent copy.
+- MDN currently warns that VideoDecoder is not Baseline across every major browser and requires a secure context. Current compatibility data reports desktop support in modern Chrome/Edge and Firefox, but actual codec/profile support and platform acceleration vary. Runtime feature detection and VideoDecoder.isConfigSupported() are necessary, followed by decoding real camera samples. The LAN deployment must use a secure context such as HTTPS or a browser-trusted localhost origin; plain HTTP LAN-IP must not be assumed to work.
+
+### Consequences for exact frame stepping
+
+- The UI must step through decoded VideoFrames in presentation order, not by incrementing an RTP timestamp or selecting every Nth encoded access unit.
+- Each displayed decoded frame needs a stable sequence ID and media timestamp. Step-forward/backward moves exactly one adjacent cached decoded frame. If that frame is not present, the UI must show that the requested frame is unavailable while the decoder catches up; it must not silently jump to live.
+- The replay decoder should remain continuously primed and should not call flush() or reset() merely because the user pauses, steps, or opens/closes the replay overlay.
+- The live WebRTC receiver must continue to pass every encoded frame unchanged and in order. The replay branch should have its own bounded copy/queue and a drop/recovery policy; replay overload must never back-pressure the receiver's live pass-through.
+- Retaining the full 15-second decoded history for two 1080p/30 streams is likely to be resource-intensive. Compare bounded rolling decoded windows, compressed access-unit history plus a warm decoder, and decode-on-demand from a prior keyframe. No strategy is proven; immediate first-frame access and exact reverse stepping remain mandatory test outcomes.
+
+### Required PoC checks
+
+1. Use actual H.264 camera access units with and without B-frames; verify input order, RTP timestamps, EncodedVideoChunk timestamps and decoded VideoFrame output order.
+2. Verify correct 90 kHz RTP timestamp unwrapping and conversion to a monotonic media timeline in microseconds, including wraparound, reconnect and timestamp discontinuities.
+3. Keep a decoder continuously running; confirm pause/step operations do not call flush() or reset() and do not cause a keyframe-only restart.
+4. Deliberately overload the replay decoder and measure queue depth, dropped replay frames, live latency, packet loss and recording continuity. Verify the live branch is unaffected.
+5. Measure actual VideoFrame resource usage and release behaviour on Windows and Linux; test two cameras and the maximum configured replay history.
+6. Test VideoDecoder.isConfigSupported() and real decode for the exact H.264 profile, level, resolution, bit depth and chroma format from each candidate camera in every target browser.
+7. Test HTTPS and the intended localhost/LAN access model on Windows and Linux.
+
+### Assessment
+
+- WebCodecs provides the required decoded-frame presentation ordering and explicit decoder lifecycle controls, but these do not automatically create a safe instant-replay cache.
+- The most important implementation hazard found here is treating flush()/reset() as normal replay controls. They alter decoder state and can force a new keyframe requirement.
+- A continuously primed, bounded, independently managed decoder/cache is still the strongest browser PoC candidate, but memory, codec compatibility, frame timestamp mapping and live isolation must be measured before any architecture decision.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebCodecs: https://www.w3.org/TR/webcodecs/
+- W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
+- MDN VideoDecoder: https://developer.mozilla.org/en-US/docs/Web/API/VideoDecoder
+- MDN Using the WebCodecs API: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+- MDN VideoFrame.close(): https://developer.mozilla.org/en-US/docs/Web/API/VideoFrame/close
+- MDN RTCEncodedVideoFrame.getMetadata(): https://developer.mozilla.org/en-US/docs/Web/API/RTCEncodedVideoFrame/getMetadata
