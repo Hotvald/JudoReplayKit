@@ -1996,3 +1996,38 @@ No local files were extracted or executed. No MediaMTX server was started. No pr
 - WebRTC Absolute Capture Time extension: https://webrtc.github.io/webrtc-org/experiments/rtp-hdrext/abs-capture-time/
 - RFC 8834, RTP synchronization context: https://www.rfc-editor.org/rfc/rfc8834.html
 - MediaMTX absolute timestamp routing: https://mediamtx.org/docs/features/absolute-timestamps
+
+
+## 2026-11-15 — Keyframe recovery requirements for an independent WebCodecs replay decoder
+
+**Scope:** Review of W3C WebRTC Encoded Transform and current MDN documentation for receiver-side keyframe requests. Read-only research; no local changes.
+
+### Findings
+
+- H.264 delta pictures depend on earlier reference pictures. A separate replay decoder cannot reliably start at an arbitrary access unit; it needs a decodable keyframe/IDR and the relevant parameter sets (SPS/PPS), followed by the dependent pictures in decode order.
+- The WebRTC Encoded Transform API exposes a receiver-side sendKeyFrameRequest() method. MDN marks it Baseline 2025 / newly available since October 2025 in current browsers. It can request that the remote sender emit a keyframe when the receiver cannot decode without one.
+- Critical limitation: the browser may decide a keyframe request is unnecessary. In that case the returned promise still fulfils even though no request was actually sent. A fulfilled promise is therefore not proof that a keyframe was requested, transmitted, received, or decoded.
+- Even if the browser sends the request, the full path must work: browser receiver -> RTCP feedback/PLI or equivalent -> MediaMTX -> original camera/encoder -> new keyframe -> browser receiver transform. The API documentation does not prove that this exact MediaMTX version and camera source will honour the request.
+- Periodically requesting keyframes can improve recovery/seekability but may increase bitrate and encoder load. The PoC must measure the effect and must not add an aggressive PLI loop that harms the live stream or recording.
+
+### Required PoC tests
+
+1. Start the receiver transform before the first incoming video frame and record time to first usable IDR/SPS/PPS and first successful independent WebCodecs decode.
+2. Deliberately reset the replay decoder and request a keyframe. Verify that an actual new IDR reaches the transform and that the separate decoder recovers; do not count promise fulfilment as success.
+3. Repeat after packet loss, a camera reconnect, a buffer wrap, and a deliberately discarded/corrupt access unit.
+4. Test whether MediaMTX v1.21.3 forwards the relevant RTCP feedback to the publishing camera, and whether the actual camera encoder reacts. Record request-to-IDR latency.
+5. Measure bitrate, encoder load, live latency and recording continuity with keyframe requests enabled versus disabled.
+6. If keyframe requests are unsupported or unreliable, the replay cache must remain continuously primed from the start of the stream and preserve a valid prior keyframe plus all dependent access units needed for decoding. Recovery after cache loss must be reported as unavailable until a valid keyframe arrives.
+
+### Assessment
+
+- Receiver-side keyframe requesting is a real API capability and improves the technical plausibility of decoder recovery, but it is not a deterministic instant-replay guarantee.
+- The independent replay decoder still needs a bounded, continuously maintained decodable history and an explicit recovery state machine. It must never silently display a stale or undecodable frame as if it were current.
+- This adds a high-priority recovery test to the WebRTC + WebCodecs PoC. No architecture is selected; overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MDN sendKeyFrameRequest(): https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpScriptTransformer/sendKeyFrameRequest
+- MDN RTCRtpScriptTransformer: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpScriptTransformer
+- W3C WebRTC Encoded Transform: https://www.w3.org/TR/webrtc-encoded-transform/
+- MDN Using WebRTC Encoded Transforms: https://developer.mozilla.org/en-US/docs/Web/API/WebRTC_API/Using_Encoded_Transforms
