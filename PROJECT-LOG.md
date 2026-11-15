@@ -1649,3 +1649,17 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - The previously proposed archive filename and tag in the setup script match the release metadata. The earlier script run never reached the FFmpeg download because it stopped at the separate MediaMTX checksum URL.
 - Next: obtain the exact FFmpeg archive and its release `checksums.sha256` into the isolated PoC1 downloads folder; verify the archive hash against the manifest; then attempt GitHub Artifact Attestation verification for `FFmpeg-Builds/FFmpeg-Builds`. If no attestation is available, record that fact and rely only on the publisher-controlled release checksum plus further build/source review—do not claim attestation success.
 - Do not extract or execute FFmpeg until integrity and provenance results are reviewed. Do not start MediaMTX yet. Production and Rev.8 remain protected; overall status remains CONDITIONAL GO for isolated PoCs only, NO-GO for architecture lock/full implementation.
+
+
+## 2026-11-15 — MediaMTX provenance verification completed
+
+- GitHub CLI 2.104.0 was installed in the isolated Windows development environment, and the owner authenticated successfully to GitHub.com as `Hotvald`. Authentication was confirmed with `gh auth status`; credentials remain in the local GitHub CLI credential store and were not shared in chat.
+- The MediaMTX v1.21.3 Windows amd64 release ZIP was verified successfully with GitHub Artifact Attestation using `gh attestation verify` against `bluenviron/mediamtx`.
+- Verified archive SHA-256: `b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74`.
+- The verification loaded one attestation and succeeded under the SLSA provenance v1 policy. Build and signer repository: `bluenviron/mediamtx`; workflow: `.github/workflows/release.yml@refs/tags/v1.21.3`.
+- This verifies the archive digest and the attested release build provenance. It is not a complete security audit or licence review.
+- The MediaMTX archive has not been extracted or executed, and the MediaMTX server has not been started. No services, firewall rules, ports, production files, or recordings were changed.
+- The FFmpeg candidate download was initiated in the isolated PoC downloads folder, but the owner has not yet supplied the resulting file listing or checksum comparison output. FFmpeg integrity and provenance therefore remain unverified; the archive must not be extracted or executed until those checks are completed.
+- Next gate: confirm the FFmpeg candidate archive SHA-256 against the downloaded release checksum manifest. If it matches, attempt GitHub Artifact Attestation verification against `FFmpeg-Builds/FFmpeg-Builds`; record an unavailable or failed attestation honestly.
+- Scope remains limited to isolated Rev.9 proof-of-concept preparation. The known-working `D:\\JudoReplayKit` installation and `D:\\JudoReplayKit_Rev8_Test` remain protected and untouched.
+- Overall status: **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.**
