@@ -1431,3 +1431,60 @@ The two reviewers must receive the same prompt and the same five source material
 - No application code, installer, service, configuration or local environment was changed by this review.
 - Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected.
 - Rev.9 work remains isolated in `C:\\JudoReplayKit_Rev9_Dev`; this entry does not claim that local workspace was inspected.
+
+## 2026-11-15 — DeepSeek cross-review and consolidated PoC refinement
+
+**Source:** Full DeepSeek cross-review supplied by the owner in the JudoReplayKit project conversation (480-line report). **Attribution:** DeepSeek. **Independent assessment:** ChatGPT. **Status:** Advisory technical review only; no requirements, architecture or implementation decision is changed by this entry.
+
+### DeepSeek's stated review scope and limitations
+
+DeepSeek describes this as a cross-review of the Gemini, Mistral and its own earlier technical reviews. It reports that it received the Requirements Draft 0.4, DECISIONS.md and PROJECT-LOG.md as text, but did not independently verify their hashes; it did not run tests; and it did not independently verify every technical source. It also notes that the original Gemini proposal was not supplied as a separate file in that review context. Accordingly, its findings are recorded as a review, not as test evidence.
+
+DeepSeek's overall verdict is **CONDITIONAL GO for isolated PoCs only** and **NO-GO for architecture lock or full implementation** until the critical feasibility work and relevant owner gates are complete.
+
+### DeepSeek's main cross-review conclusions
+
+- It reports broad agreement among the three AI reviews that immediate replay while recording is active, exact decoded-frame stepping, dual-camera timing, replay/recording isolation, storage safety and licensing are unresolved technical risks requiring proof.
+- It reiterates that a recording-list entry, a growing file, or a successful HTTP response does not prove immediate, user-visible replay from an actively written recording.
+- It agrees that libmpv's backward-step function alone is not evidence of exactly one adjacent decoded frame per action. A controlled decode/positioning method with an explicit frame cache is one candidate, not a proven solution.
+- It retains both advanced web/WebCodecs (A) and native/hybrid frame-cache (D) as serious candidates. Neither has reproducible project-specific proof. Architecture B using libmpv alone is not sufficient evidence for the exact-step requirement. Architecture C should remain lower priority pending measurement, not be declared impossible.
+- It highlights the WebCodecs secure-context issue: LAN-IP HTTP origins may not qualify, while localhost is treated differently. It recommends testing the actual access paths, including localhost and LAN-IP, and HTTPS if required.
+- It emphasizes that ingest-arrival timestamps must not be represented as camera capture timestamps. Alignment must report measured offset, drift and uncertainty.
+- It warns that OS scheduling controls such as ionice are not a cross-platform isolation strategy, especially because ionice is not available on Windows.
+- It calls for exact dependency/build/license review, including FFmpeg build/linkage, Qt bindings, codecs and redistribution obligations. General labels such as “free” or “LGPL” are not enough to establish that a particular distributed build meets project constraints.
+
+### PoC plan refinement proposed by DeepSeek
+
+DeepSeek recommends the following sequence:
+
+1. **PoC 1 — Live-edge replay during active recording.** Use two disposable RTMP test streams and an active recording. Exercise 5/15/30-second look-back intervals, repeated replay requests, segment/part boundaries and an intentionally incomplete/truncated final part. Measure button-to-first-usable-frame latency, interval completeness/partial availability, file growth and recording continuity. The implementation must disclose unavailable portions honestly and must not block recording while replay reads.
+2. **PoC 2 — Exact decoded-frame stepping.** Use footage with unique visible frame numbers at representative frame rates and GOP settings; include variable-frame-rate footage if relevant. Compare a WebCodecs client with a native libavcodec/decode-cache approach. Test repeated forward/backward steps, seeking and then stepping backward. Test WebCodecs from localhost and the intended LAN-IP origin (and HTTPS if needed). Record actual frame identities, skipped/repeated frames and action latency.
+3. **PoC 4 — Replay/recording isolation.** First establish a dual-stream recording baseline, then repeat while performing replay, seeking, frame stepping and slow motion. Compare ingest/recording continuity, live latency, resource use and dropped frames.
+4. **PoC 3 — Dual-camera timing.** Use repeated shared visible events at the beginning and end of a sustained run, while collecting available source, ingest and media timestamps. Measure offset, drift and uncertainty; introduce controlled network jitter/asymmetry where useful.
+5. **PoC 5 — Storage safety.** Use a disposable test volume only. Exercise low-space warning, controlled stop, interrupted process and simulated abrupt failure. Verify preservation/playability of completed recordings, honest handling of the incomplete tail, and absence of automatic deletion.
+6. **Launcher feasibility check.** Only after PoC 1 and PoC 2 have established a viable media path, test a portable launcher with relative paths and controlled start/stop on the target platforms. This is not an approval of a launcher technology.
+
+DeepSeek proposes useful test instrumentation and scenarios, but suggested timings or other numerical targets in its report are not adopted as acceptance thresholds unless already specified in Draft 0.4 or subsequently approved by the owner. In particular, no unapproved sub-second latency or zero-drop numerical performance target is created by this log entry.
+
+### ChatGPT's independent assessment and qualifications
+
+- The PoC order **1, 2, 4, 3, 5, then launcher** is accepted as a practical risk-first sequence. PoC 4 is placed before timing and storage because replay/recording isolation is a core invariant that should be demonstrated before broader implementation.
+- Comparing WebCodecs and native decode/cache approaches in PoC 2 is valuable, but the comparison must use the same source footage and equivalent test actions. The result must report the actual frame identities, not simply that a player API returned success.
+- The localhost/LAN-IP/HTTPS test is a useful addition. The actual browser, OS, origin and codec combinations must be recorded; do not generalize from one browser or machine.
+- DeepSeek's broad agreement summary should not be read as proof that the reviews were fully independent: the reviewers had overlapping project documents and conversation-derived material. The reports are useful independent perspectives, but independence of source material and testing is not established.
+- Architecture D remains a working hypothesis, not a proven winner. A remains in consideration. B alone is not adequate unless a concrete implementation demonstrates exact stepping. C is lower priority, not conclusively disproven.
+- The visible-flash/shared-event method is a test technique for measuring timing; it does not add a requirement for manual user calibration or hardware synchronization.
+- The approved requirement for automatic two-camera alignment with measured offset/uncertainty remains in force. No requirement is added to claim capture-time synchronization where only ingest-time evidence exists.
+- The exact one-decoded-frame stepping requirement remains firm. A PoC failure must be returned to the owner for a decision; it must not be silently weakened to approximate seeking.
+- The approved bookmark model remains unchanged: bookmarks identify the viewed event/media moment, including when created from Instant Replay. This review does not reopen bookmark semantics.
+- The storage policy remains unchanged: no automatic deletion; preserve existing recordings; use a test-derived safety reserve and controlled stop. All destructive storage tests must use disposable test data/volumes only.
+- Any licensing statement about a codec, patent pool, FFmpeg build or GUI toolkit must be verified against the exact versions, build options, distribution model and applicable jurisdictions before selection. No unverified licensing claim is treated as clearance.
+
+### Current disposition and next action
+
+- **Status remains:** CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock and full Rev.9 implementation until critical feasibility evidence is available.
+- The next practical task is to prepare and run **PoC 1** in the isolated Rev.9 development workspace, using only disposable test media and confirming the exact local test environment before relying on any binary or configuration.
+- No local files, services, configurations or recordings were changed by this review. This log update does not claim that `C:\\JudoReplayKit_Rev9_Dev` has been inspected or populated.
+- Production `D:\\JudoReplayKit` and Rev.8 test `D:\\JudoReplayKit_Rev8_Test` remain protected. No tests may modify either location.
+- Requirements Draft 0.4 and DECISIONS.md are not changed by this entry.
+
