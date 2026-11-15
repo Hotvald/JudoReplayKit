@@ -3417,3 +3417,34 @@ HLS ProgramDateTime is a viable alternative source of absolute MediaMTX timeline
 - hls.js Fragment `programDateTime`, `startPTS`, `startDTS` and Part offsets: https://github.com/video-dev/hls.js/blob/master/src/loader/fragment.ts
 - hls.js live latency controls: https://github.com/video-dev/hls.js/blob/master/docs/API.md
 - MediaMTX HLS configuration defaults: https://mediamtx.org/docs/references/configuration-file
+## 2026-11-15 — LL-HLS ProgramDateTime coverage and hls.js forward-only propagation
+
+**Scope:** Exact inspection of gohlslib v2.4.7 low-latency playlist serialization and hls.js current `Fragment`, `level-helper` and `m3u8-parser` source. No runtime PoC or local changes.
+
+### Verified details
+
+- gohlslib v2.4.7's low-latency playlist serializer emits `EXT-X-PROGRAM-DATE-TIME` for the most recent two complete segments; older segments in the same playlist may have no explicit PDT tag. The current segment's partial parts are associated with the parent fragment and its program time.
+- hls.js `Fragment.programDateTime` is nullable and parsed from `EXT-X-PROGRAM-DATE-TIME`. `Fragment.startPTS`/`endPTS` and `startDTS`/`endDTS` are set after transmux. `Part.start` is parent fragment start plus the accumulated part offset.
+- hls.js `updateFragPTSDTS()` sets the fragment's `startPTS` to the minimum of the fragment's audio/video PTS starts and retains separate DTS. This is useful for a common multiplexed segment timeline.
+- hls.js `assignProgramDateTime()` propagates a known fragment's programDateTime forward to the next fragment by adding the previous fragment's duration. It does not inherently backfill fragments preceding the first tagged fragment.
+- hls.js `mergeDetails()` preserves PTS/DTS metadata for overlapping fragments and has a program-date-time merge path for certain delta playlist updates, but the app must not assume every older fragment will always have a non-null programDateTime after a cold start or discontinuity.
+
+### Required HLS timestamp-map implementation behaviour
+
+1. On every playlist refresh, inspect all current fragments and parts. As soon as a fragment has a valid explicit or propagated programDateTime, store its mapping by camera path, discontinuity counter (`cc`), media sequence (`sn`), fragment URI and start/end PTS.
+2. Keep the application's own rolling map for at least the full 30-second bookmark/replay horizon plus the current live-delay window. Do not rely on the current playlist retaining PDT tags or old fragments.
+3. For older untagged fragments at cold start, infer programDateTime backwards from a later known tagged fragment using the intervening EXTINF durations only if there is no discontinuity, gap, skipped segment or unaccounted timeline reset. Mark inferred mappings as lower confidence until validated.
+4. If there is an `EXT-X-DISCONTINUITY`, sequence reset, gap, or unexplained PTS drift, start a new mapping epoch and do not propagate timestamps across the boundary without independent evidence.
+5. For the exact displayed frame, locate the containing fragment using `requestVideoFrameCallback().mediaTime` and the hls.js video/combined PTS range. Candidate mapping is `PDT + (mediaTime - fragment.startPTS) * 1000`; verify that the fragment PDT anchor and hls.js `startPTS` refer to the same first presentation sample. No-B-frame input simplifies this because PTS and DTS coincide; audio/video start offsets still need measurement.
+6. Compare the HLS-derived NTP with MediaMTX fMP4 segment NTP and the RTSP sidecar's `PacketNTP()` mapping. Store the mapping confidence/uncertainty with the bookmark.
+
+### Assessment
+
+HLS can provide a usable live-frame-to-NTP mapping, but low-latency playlists do not carry explicit PDT on every segment. A persistent application-side map is required; cold-start backfill must be guarded against discontinuities. This is a manageable implementation detail, not a reason to reject HLS, but the mapping must be tested before it is used for referee bookmarks. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- gohlslib v2.4.7 low-latency playlist PDT serialization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- hls.js Fragment metadata and PTS/DTS fields: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/loader/fragment.ts
+- hls.js PTS/DTS aggregation and fragment timing: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/utils/level-helper.ts
+- hls.js programDateTime propagation: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/loader/m3u8-parser.ts
