@@ -3994,3 +3994,32 @@ Hardware decoding is worth testing and may materially reduce CPU pressure, espec
 - gohlslib v2.4.7 disk part writer/reader: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_disk.go
 - MediaMTX v1.21.3 HLS directory configuration passed into muxer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/server.go
 - MediaMTX default hlsDirectory: https://github.com/bluenviron/mediamtx/blob/v1.21.3/mediamtx.yml
+## 2026-11-15 — LL-HLS part reads during segment finalization: concurrency stress test required
+
+**Scope:** Exact inspection of gohlslib v2.4.7 RAM/disk storage part readers and parent segment finalization. This records a concurrency test requirement, not a confirmed upstream defect.
+
+### Source observations
+
+- Part HTTP handlers are registered when a part is finalized. They can remain addressable while the parent segment is still open and while subsequent parts are written.
+- At parent segment rotation, the parent file's `Finalize()` finalizes storage and, in disk mode, releases the in-memory part buffers after setting the last part size and closing the file. A part request can occur near this transition.
+- RAM part readers construct a reader over the part buffer; disk part readers read from the in-memory part buffer while present and use a disk-range reader after the parent file has finalized and the buffer is released.
+- The inspected storage methods do not show a per-part mutex around the transition from RAM-buffer reads to disk-range reads. This is not enough by itself to conclude there is a race or functional bug; the surrounding Go concurrency model and actual race-detector results must decide.
+
+### PoC stress test
+
+- Repeatedly fetch every advertised part while the same segment is rotating/finalizing, in both RAM (`hlsDirectory=""`) and disk-backed modes.
+- Fetch a part immediately before, during and immediately after the next segment boundary; verify HTTP status, content length, byte-for-byte consistency and parseability.
+- Concurrently fetch the completed segment and verify it equals the ordered concatenation of its part payloads.
+- Run a Go race-detector test against the exact pinned gohlslib version if feasible; distinguish any race in test harness from a race in the library.
+- Repeat with two cameras and sustained part requests while the replay worker and live hls.js player both consume the same path.
+
+### Assessment
+
+This is a targeted robustness test for the HLS/WebCodecs worker because it will read parts exactly as the segment rotates. No upstream defect is asserted. The candidate remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- gohlslib v2.4.7 part request registration and reader callback: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- gohlslib v2.4.7 RAM part storage: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_ram.go
+- gohlslib v2.4.7 disk part storage and finalization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/part_disk.go
+- gohlslib v2.4.7 disk parent file finalization: https://github.com/bluenviron/gohlslib/blob/v2.4.7/pkg/storage/file_disk.go
