@@ -3303,3 +3303,58 @@ MediaMTX's 1-second RTCP Sender Reports plus Chromium's WebRTC captureTime metad
 - MediaMTX v1.21.3 fMP4 H.264 DTS/PTSOffset/NTP sample creation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4.go
 - MediaMTX v1.21.3 fMP4 track startNTP/startDTS and drift validation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_track.go
 - MediaMTX v1.21.3 WebRTC H.264 B-frame restriction: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
+## 2026-11-15 — RTCRtpReceiver.jitterBufferTarget as a Live Delay mechanism
+
+**Scope:** Review of the W3C WebRTC Recommendation, MDN documentation and current browser compatibility data. Candidate mechanism only; no runtime PoC, local changes, or architecture decision.
+
+### Verified API behaviour
+
+- `RTCRtpReceiver.jitterBufferTarget` lets an application specify a preferred jitter-buffer hold duration in milliseconds. The setter accepts values from 0 through 4000 ms; values below zero or above 4000 ms throw RangeError.
+- The property is a target/hint, not a direct command to set the actual browser buffer. The user agent clamps the actual target to implementation-defined minimum/maximum values based on network conditions and memory constraints. The property getter returns the requested value, not the actual buffer delay.
+- The target influences retransmission and packet-loss recovery as well as playout delay. Changing it takes effect gradually; the W3C specification says it may take several seconds to achieve 1 second of buffering and SHOULD not take more than 30 seconds while packets continue to arrive.
+- During adjustment, the user agent may accelerate/decelerate media. For video this can mean repeated frames or dropped frames. Therefore Live Delay changes may not be instantaneous or frame-perfect during the transition.
+- If audio and video receivers are synchronized, the user agent SHOULD use the larger of the two receivers' `jitterBufferTarget` values for both receivers. If JudoReplayKit receives synchronized audio and video and uses the target on video, set/measure the audio receiver consistently or explicitly validate the resulting A/V behaviour.
+- Current compatibility data reports support in Chrome 124+, Edge 124+ and Firefox 115+; Safari is not currently supported in the reviewed compatibility data. The current user environment's Chrome version is above this threshold, but the feature must still be detected at runtime.
+
+### Measurement and telemetry
+
+- `RTCInboundRtpStreamStats.jitterBufferDelay / jitterBufferEmittedCount` gives the average actual time samples/frames spend in the jitter buffer.
+- `jitterBufferTargetDelay / jitterBufferEmittedCount` gives the average target delay applied over emitted samples/frames. `jitterBufferMinimumDelay / jitterBufferEmittedCount` estimates the minimum buffer delay required by network conditions without external target mechanisms.
+- These metrics must be read as deltas over a measurement interval, not as absolute instantaneous delay. The difference between average target delay and minimum delay can show how much additional hold the application requested; average `jitterBufferDelay` shows actual buffer residence time.
+- `requestVideoFrameCallback()` `captureTime` and `expectedDisplayTime` can provide a separate end-to-end MediaMTX-NTP-to-presentation measurement once captureTime is available. This includes server-estimated source time and all subsequent delivery/playout stages, not guaranteed physical camera sensor capture time.
+
+### JudoReplayKit candidate topology
+
+1. Keep the visible live-view PeerConnection separate from the replay-only PeerConnection and its worker-owned compressed ring.
+2. Apply `jitterBufferTarget` only to the live-view video receiver, using the selected Live Delay target where supported. Keep the replay-only receiver at its normal/low-latency setting so the replay ring remains warm near the live edge.
+3. Use `requestVideoFrameCallback()` on the live video element to record the actual displayed frame's RTP timestamp and captureTime. A bookmark then refers to the delayed frame actually shown, not the replay reader's newer incoming frame.
+4. Measure actual delay with `jitterBufferDelay`, `jitterBufferTargetDelay`, `jitterBufferMinimumDelay`, `captureTime`, `expectedDisplayTime` and `receiveTime`. Do not display the selected target as a guaranteed actual delay.
+5. Set the target before the match/live session where possible. If the user changes delay during a match, show/record the transition until the actual buffer reaches a stable range; do not imply immediate exact switching.
+
+### Five-second Live Delay limitation
+
+- The API's maximum requested target is 4 seconds, while Rev.9 draft 0.4 confirms Live Delay choices of 1, 2, 3, 4 and 5 seconds.
+- `jitterBufferTarget = 4000` cannot by itself guarantee a 5-second selected delay. Natural source/network/browser delay may make total displayed delay exceed 5 seconds, but it cannot be assumed to fill the missing second.
+- A 5-second option may require an additional application-controlled post-decode delay or another media path. A 1-second decoded frame buffer at 1080p30 is a non-trivial but potentially manageable memory cost; retaining hardware VideoFrames may still pin decoder surfaces, so this would need a copied bounded representation and a separate PoC.
+- Do not silently map the 5-second selection to 4 seconds. Preserve the UI requirement and test an explicit 4-second jitter target plus a 1-second application delay, or another measured solution.
+
+### Required PoC tests
+
+- Test Live Delay targets 1, 2, 3 and 4 seconds with the actual two-camera MediaMTX WebRTC path; measure time to stabilize, actual jitter-buffer delay, total NTP-to-display delay, repeated/dropped frames, packet loss/retransmissions, CPU/GPU and memory.
+- Test the 5-second option separately; compare 4-second jitter target plus a 1-second post-decode buffer against any alternative. Measure the actual displayed delay and bookmark timestamp correctness.
+- Confirm replay-only receiver remains unaffected by live receiver target changes and that its encoded ring stays near the live edge.
+- If audio is present, test audio/video synchronization when setting the target on both receivers.
+- Repeat target changes during active stream and under Wi-Fi jitter/loss. Check whether repeated/dropped frames during adjustment affect user perception or bookmark capture.
+
+### Assessment
+
+`jitterBufferTarget` is a strong standards-based candidate for Live Delay 1–4 seconds on Chrome/Edge/Firefox and keeps the delay control on the live receiver rather than the replay reader. It does not directly implement a guaranteed end-to-end delay, and it cannot express the required 5-second target. The 5-second choice needs a separate bounded delay mechanism or a different measured path. This fits the requirement that Live Delay be independent of Instant Replay but remains a PoC candidate only. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- W3C WebRTC `RTCRtpReceiver.jitterBufferTarget` normative algorithm: https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-jitterbuffertarget
+- W3C WebRTC jitter-buffer target and gradual adjustment: https://www.w3.org/TR/webrtc/#dom-rtcrtpreceiver-jitterbuffertarget
+- MDN `RTCRtpReceiver.jitterBufferTarget` range and limitations: https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpReceiver/jitterBufferTarget
+- MDN `RTCInboundRtpStreamStats.jitterBufferDelay`: https://developer.mozilla.org/en-US/docs/Web/API/RTCInboundRtpStreamStats/jitterBufferDelay
+- W3C WebRTC Stats definitions: https://www.w3.org/TR/webrtc-stats/
+- Browser compatibility: https://caniuse.com/mdn-api_rtcrtpreceiver_jitterbuffertarget
