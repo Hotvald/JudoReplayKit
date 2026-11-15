@@ -3448,3 +3448,35 @@ HLS can provide a usable live-frame-to-NTP mapping, but low-latency playlists do
 - hls.js Fragment metadata and PTS/DTS fields: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/loader/fragment.ts
 - hls.js PTS/DTS aggregation and fragment timing: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/utils/level-helper.ts
 - hls.js programDateTime propagation: https://github.com/video-dev/hls.js/blob/127c6adee512843abf85748d82767bdf1a3c8e5c/src/loader/m3u8-parser.ts
+## 2026-11-15 — MediaMTX LL-HLS default PART-HOLD-BACK and 1–5 second hls.js target feasibility
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 defaults, gohlslib v2.4.7 playlist generation and hls.js live-latency configuration. No runtime PoC or local changes.
+
+### Verified defaults and formula
+
+- MediaMTX v1.21.3 default HLS variant is `lowLatency`, `hlsSegmentCount` is 7, `hlsSegmentDuration` is 1 second and `hlsPartDuration` is 200 milliseconds.
+- gohlslib v2.4.7 calculates LL-HLS `PART-HOLD-BACK` as `2.5 * partTargetDuration`. With the default 200 ms part target, the advertised part holdback is **500 ms**.
+- hls.js supports an explicit `liveSyncDuration` target in seconds. When explicitly set, it takes precedence over the manifest-derived holdback/segment-count target. hls.js documentation warns that a target below roughly three segment/part target durations may cause stalls; for the default 200 ms part target, three parts are 600 ms, so a 1-second target is not below that rough part-based floor.
+- The 7-segment default playlist retains more than the 5-second maximum Live Delay target at the default 1-second segment duration, but actual available duration and part retention must be checked in the generated playlist and under stalls/discontinuities.
+
+### Implications
+
+- HLS/hls.js is a credible single live-view candidate for all 1–5 second Live Delay selections. Unlike `RTCRtpReceiver.jitterBufferTarget`, `liveSyncDuration` has no 4,000 ms API setter cap.
+- The default 500 ms PART-HOLD-BACK establishes the low-latency live edge; an explicit 1–5 second hls.js target can hold playback farther behind that edge. This is still a player target, not a guaranteed actual end-to-end delay.
+- For 1 second, the target is above 3 x 200 ms part target, but actual stability depends on part availability, playlist reload cadence, network jitter, decoder throughput and hls.js recovery policy. Do not infer success from the formula alone.
+- For 5 seconds, 7 x 1-second segments provide a nominal playlist window, but verify that the current playlist actually contains the requested position and that hls.js does not seek forward to liveSyncPosition.
+- If hls.js uses playback-rate catch-up or a seek-to-live recovery, the visible stream may repeat/drop frames or jump. Capture the actual displayed frame timestamp and record these events; do not silently preserve the requested target while showing a different media time.
+
+### Required PoC
+
+Test `liveSyncDuration` values 1, 2, 3, 4 and 5 seconds with MediaMTX v1.21.3 default LL-HLS settings and the actual two-camera streams. Record actual `requestVideoFrameCallback` frame NTP, live edge NTP, `video.currentTime`, hls.js `liveSyncPosition`, playbackRate, buffer ranges, part/fragment load times, stalls, dropped/repeated frames, CPU/GPU and memory. Repeat with network jitter/loss and MediaMTX restart. Verify the bookmark maps to the actual displayed frame and to the fMP4 archive.
+
+### Assessment
+
+LL-HLS/hls.js is now a strong candidate for the visible live view and all five Live Delay options, with the separate WebRTC replay worker preserving instant replay and exact H.264 access-unit history. It avoids the 4-second `jitterBufferTarget` cap, and MediaMTX already emits ProgramDateTime for archive mapping. Its target latency and exact frame-to-PDT mapping still need runtime validation. No architecture is selected. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 HLS defaults: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+- gohlslib v2.4.7 PART-HOLD-BACK calculation: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_stream.go
+- hls.js live latency API: https://github.com/video-dev/hls.js/blob/master/docs/API.md
