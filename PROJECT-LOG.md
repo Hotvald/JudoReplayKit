@@ -2518,3 +2518,54 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 - MediaMTX v1.21.3 H.264 unit remuxer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/unit_remuxer.go
 - MediaMTX v1.21.3 H.264 format updater: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/format_updater.go
 - Upstream multiple-PPS issue: https://github.com/bluenviron/mediamtx/issues/6269
+
+## 2026-11-15 — Warm H.264 replay buffer: compressed history plus bounded decoded-frame cache
+
+**Scope:** Design analysis based on W3C WebCodecs and WebRTC Encoded Transform specifications and MDN guidance. No runtime PoC was run; no architecture is selected and no local files/services/configurations were touched.
+
+### Core finding
+
+A compressed H.264 access-unit ring is memory-efficient, but it cannot independently provide an immediately displayable arbitrary historical frame. H.264 decoding must begin at a valid key/random-access chunk with the required parameter sets and then consume the dependent access units in decode order. WebCodecs outputs decoded frames in presentation order. A VideoDecoder that has been reset or recreated requires a new key chunk; VideoFrame resources must be explicitly closed when evicted, and decodeQueueSize must be bounded.
+
+### Memory estimates
+
+Assumptions: 30 fps, 15 seconds, tightly packed 8-bit 4:2:0/NV12 (1.5 bytes per pixel), decimal MB/GB. These are raw image-payload estimates only; actual GPU/system allocation, row alignment, copies and metadata may increase usage.
+
+- 1920x1080: 3,110,400 bytes/frame x 450 frames = 1.40 GB per camera; 2.80 GB for two cameras.
+- 1280x720: 1,382,400 bytes/frame x 450 frames = 0.62 GB per camera; 1.24 GB for two cameras.
+- 8 Mbit/s compressed H.264 for 15 seconds = 15 MB per camera (30 MB for two), before ring metadata/overhead. Actual bitrate and GOP affect this.
+- Full decoded 30-second history doubles the 15-second figures. At 60 fps, decoded cache estimates double again.
+
+### Candidate buffer model for PoC (not architecture approval)
+
+1. Keep a permanently connected, dedicated replay receiver per camera. The normal live-view PeerConnection remains free of application transforms where possible.
+2. Copy encoded H.264 access units into a fixed-size, time- and byte-bounded circular buffer. Store monotonic presentation/decode timing, key/random-access markers, SPS/PPS identity/version, source/connection epoch and discontinuity markers. Evict only at a safe random-access boundary; never leave a retained dependent access unit without its required preceding decode chain.
+3. Run a dedicated warm VideoDecoder continuously from that replay receiver. Maintain a bounded decoded-frame cache for the configured replay horizon if the target hardware can sustain it. This is the only straightforward way to guarantee an already-decoded frame at arbitrary points across the whole horizon.
+4. Keep the compressed ring as the lower-memory recovery/history layer. If the full decoded cache is too expensive, test a shorter decoded hot window plus compressed history and measure cold pre-roll decode latency from the preceding keyframe. This fallback must be labelled as a latency trade-off; it does not meet instant arbitrary seek unless the measured pre-roll is acceptably fast.
+5. Bound every queue and ring. If decode falls behind, record the gap and recover at the next valid keyframe; do not let replay work block or backpressure live ingest/recording. The W3C WebRTC Encoded Transform spec explicitly disables Streams backpressure because WebRTC prioritizes low latency, so an application transform must not assume that a slow worker safely pauses media production.
+6. On eviction, call VideoFrame.close() exactly once for each owned frame. Avoid unnecessary clone/copy operations. Track decoded-frame count, bytes where measurable, decodeQueueSize, decode throughput, keyframe recovery, dropped access units and browser/GPU memory.
+
+### Important trade-off
+
+- Full-horizon decoded cache: strongest candidate for instant first-frame display and exact frame stepping, but potentially very high memory/GPU cost (especially two 1080p cameras).
+- Compressed ring + short decoded cache: much lower memory, but historical positions outside the decoded hot window require decoding from a prior keyframe; button-to-first-frame latency is therefore not guaranteed to be immediate.
+- A low-resolution decoded cache with full-resolution compressed history may improve responsiveness but cannot silently substitute lower-resolution replay if the referee must inspect full detail. Any quality trade-off must be explicit and tested.
+
+### PoC acceptance measurements
+
+- Two cameras at target resolution/fps/bitrate, each with a permanently warm replay receiver and decoder.
+- Measure memory/GPU allocation over time and verify strict upper bounds; stress with 5/15/30-second retention and two simultaneous replay operations.
+- Verify every retained decoded frame has correct presentation timestamp and exact adjacent frame stepping in both directions, including across IDR/GOP boundaries.
+- Verify ring eviction always leaves a decodable start point and matching SPS/PPS; test multiple PPS, parameter-set changes, reconnects, missing/corrupt access units and long GOPs.
+- Measure replay-button-to-first-displayed-frame separately for positions inside and outside the decoded hot window. Do not call a WebRTC connection established or an encoded chunk received a successful replay.
+- Measure live-view latency, recording continuity, replay decode backlog, dropped units and CPU/GPU independently. Any live degradation is a PoC failure for the isolation requirement.
+
+### Evidence
+
+- W3C WebCodecs: https://www.w3.org/TR/webcodecs/
+- W3C WebRTC Encoded Transform (backpressure disabled): https://www.w3.org/TR/webrtc-encoded-transform/
+- MDN WebCodecs usage and VideoFrame resource management: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+
+### Assessment
+
+The strongest next experiment is a continuously warm replay decoder with a bounded decoded-frame cache plus a compressed access-unit ring. This is a candidate to test, not a selected architecture. If full-horizon decoded caching is too expensive, the hybrid fallback must be judged against measured first-frame latency, not assumed to be instant. Overall project status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
