@@ -1675,3 +1675,15 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - This checksum comparison does not by itself authenticate the publisher or prove build provenance. Next gate: attempt GitHub Artifact Attestation verification for this exact archive against `FFmpeg-Builds/FFmpeg-Builds`.
 - The FFmpeg archive remains unextracted and unexecuted. No server has been started and no production or Rev.8 files, services, firewall rules, ports, or recordings have been changed.
 - Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.**
+
+
+## 2026-11-15 — FFmpeg GitHub attestation lookup returned HTTP 404
+
+- The owner successfully ran `gh attestation verify` for the checksum-matched candidate archive `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip`, against the requested repository `FFmpeg-Builds/FFmpeg-Builds`.
+- GitHub CLI loaded the local archive digest: `sha256:0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`.
+- The attestation lookup failed with HTTP 404 from the GitHub API at the repository attestations endpoint for that digest and SLSA provenance v1 predicate. No attestation was returned, so provenance verification did **not** succeed.
+- A 404 from this lookup does not prove the archive is malicious or that no provenance exists anywhere; it means this repository/digest/predicate lookup did not return an attestation. Do not describe the FFmpeg archive as attested or provenance-verified.
+- The release checksum comparison remains successful. It establishes that the downloaded ZIP matches the digest in the release's checksum manifest, but does not independently authenticate the publisher or build process.
+- The candidate archive remains unextracted and unexecuted. No MediaMTX server has been started, and no production or Rev.8 files, services, firewall rules, ports, or recordings have been changed.
+- Next review: inspect the release's published source/workflow, checksum-generation process, build configuration and bundled licence notices; determine whether the project publishes attestations under another supported identity or whether independent provenance evidence is available. Do not bypass the failed attestation check by silently trusting a third-party checksum.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation**.
