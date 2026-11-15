@@ -1580,3 +1580,14 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - MediaMTX's official security documentation explicitly recommends GitHub Artifact Attestation verification with `gh attestation verify --repo bluenviron/mediamtx` for release binaries.
 - Official GitHub CLI Windows installation documentation lists WinGet command `winget install --id GitHub.cli --source winget`; installation modifies PATH and requires a new terminal session. No installation was attempted or authorized.
 - Next step requires owner's approval before installing GitHub CLI. Existing MediaMTX archive remains unextracted and unexecuted. FFmpeg archive has not been downloaded.
+
+
+### Addendum — GitHub CLI installed for artifact verification
+
+**Source:** User-provided PowerShell output, 2026-11-15.
+
+- User ran `winget install --id GitHub.cli --source winget`.
+- WinGet found GitHub CLI 2.104.0, downloaded the official GitHub CLI Windows x64 MSI (14.7 MB), reported successful installer hash verification, and reported successful installation.
+- This is a user-approved installation for the purpose of verifying MediaMTX release provenance. It does not verify the MediaMTX archive itself.
+- The current PowerShell session may not have refreshed PATH. Next: open a new PowerShell window and run `gh --version`; then verify the existing archive with GitHub Artifact Attestations using repository `bluenviron/mediamtx` before extracting or executing it.
+- No MediaMTX/FFmpeg archive extraction or execution; no server, service, firewall, stream, or recording changes.
