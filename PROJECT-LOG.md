@@ -3106,3 +3106,24 @@ This policy separates data preservation from decode performance. It may provide 
 - W3C WebRTC Encoded Transform backpressure and drop/order rules: https://www.w3.org/TR/webrtc-encoded-transform/
 - W3C WebCodecs EncodedVideoChunk immutability/transfer and decoder queue semantics: https://www.w3.org/TR/webcodecs/
 - MDN WebCodecs decoder queue management: https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Using_the_WebCodecs_API
+## 2026-11-15 — H.264 RTP timestamp wrap duration and long-event timeline test
+
+**Scope:** Calculation from the H.264 RTP timestamp format defined in RFC 6184. No runtime PoC or local changes.
+
+### Verified timing facts
+
+- RFC 6184 specifies a 32-bit RTP timestamp for H.264 and mandates a 90 kHz clock rate. The timestamp represents the sampling instant of the content.
+- A 32-bit 90 kHz clock wraps after `2^32 / 90000` seconds = **47,721.8588 seconds**, approximately **13 hours, 15 minutes, 21.86 seconds**.
+- This is long enough to occur during an extended tournament day or a continuously running venue installation. A timestamp implementation that only compares raw unsigned 32-bit values will eventually see a large backwards jump and can corrupt ordering, durations, replay seek and bookmark mapping.
+
+### JudoReplayKit requirements
+
+1. Maintain a 64-bit unwrapped RTP tick counter per camera/source epoch. Use modulo-aware deltas and distinguish a normal 32-bit wrap from a source restart/discontinuity.
+2. Keep the raw 32-bit RTP value for diagnostics and the unwrapped 64-bit value for timeline/index operations.
+3. Convert to WebCodecs microsecond PTS using the 90 kHz rational clock; avoid accumulating per-frame floating-point increments.
+4. Add a synthetic wrap test crossing `0xFFFFFFFF -> 0x00000000` and a long-duration test spanning more than 13h15m of simulated source time.
+5. A camera reconnect starts a new source epoch even if the first new RTP timestamp happens to be numerically close to the previous epoch.
+
+### Evidence
+
+- RFC 6184, H.264 RTP timestamp field and 90 kHz clock rate: https://www.rfc-editor.org/rfc/rfc6184.html
