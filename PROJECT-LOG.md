@@ -1687,3 +1687,17 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - The candidate archive remains unextracted and unexecuted. No MediaMTX server has been started, and no production or Rev.8 files, services, firewall rules, ports, or recordings have been changed.
 - Next review: inspect the release's published source/workflow, checksum-generation process, build configuration and bundled licence notices; determine whether the project publishes attestations under another supported identity or whether independent provenance evidence is available. Do not bypass the failed attestation check by silently trusting a third-party checksum.
 - Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation**.
+
+
+## 2026-11-15 — FFmpeg build-script review (source inspection only)
+
+The user supplied the FFmpeg-Builds workflow `.github/workflows/build.yml` and the repository's `build.sh` for review. Initial observations from the supplied `build.sh`:
+- The script selects configuration from `variants/${TARGET}-${VARIANT}.sh` and optional `addins/*.sh`; therefore the exact Windows x64 LGPL 9.0 variant file and any referenced add-ins are required before assessing configure flags and bundled components.
+- FFmpeg source is cloned from the configured repository/branch (defaults shown are the official FFmpeg GitHub repository and `master`), not pinned in this script to a specific immutable commit. The actual resolved commit and build inputs would need independent verification for reproducibility.
+- The build runs inside a Docker image selected through sourced variables; the Docker image definition and relevant base-image workflow must also be inspected to understand toolchain and dependency provenance.
+- The supplied workflow disables BuildKit provenance and SBOM for image builds (`provenance: false`, `sbom: false`). The supplied release step creates a SHA-256 manifest with `sha256sum`; that checksum is integrity metadata, not a signed provenance attestation.
+- The source excerpt alone does not establish whether the downloaded LGPL-labelled archive has GPL/nonfree components disabled. Do not infer the actual build flags or legal status until the matching variant and add-in files, generated configure command/build configuration, and bundled licence notices are inspected.
+
+FFmpeg ZIP SHA-256 matches the release manifest: `0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`. GitHub CLI attestation lookup against `FFmpeg-Builds/FFmpeg-Builds` returned HTTP 404; provenance remains unverified, not proven invalid. ZIP remains unextracted and unexecuted. MediaMTX remains separately verified by its GitHub attestation and has not been extracted or started.
+
+Next inspection requested: read-only view of `variants/win64-lgpl 9.0.sh` (and any add-ins it references). No local commands to run, no extraction, no server start, and no changes to protected production or Rev.8 locations. Status remains CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation.
