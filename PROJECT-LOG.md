@@ -3713,3 +3713,26 @@ The HLS/fMP4 → MP4Box.js → WebCodecs candidate still looks promising, but it
 - MediaMTX v1.21.3 HLS track creation from stream descriptions: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
 - gohlslib v2.4.7 H.264 SPS/PPS handling and init-file guard: https://github.com/bluenviron/gohlslib/blob/v2.4.7/muxer_segmenter.go
 - MediaMTX v1.21.3 stored H.264 parameter-set behaviour: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/format_updater.go
+## 2026-11-15 — MP4Box.js packaging and licensing fit for the HLS/WebCodecs PoC
+
+**Scope:** Review of the pinned MP4Box.js v2.5.0 package metadata. No package installed, built or executed; no local files changed.
+
+### Verified package facts
+
+- MP4Box.js v2.5.0 declares `BSD-3-Clause` and publishes prebuilt JavaScript distributions (`dist/mp4box.all.*` and `dist/mp4box.simple.*`).
+- Its package metadata lists no runtime `dependencies`; the listed dependencies are development/build/test tooling. The package declares a Node.js engine requirement for its package tooling, but the browser distribution is intended to be loaded by web applications. The PoC should consume a pinned prebuilt browser bundle and must not require Node at runtime.
+- The `simple` export is a potential smaller parsing-only entry point, but its exact feature set/size must be checked before selecting it. Otherwise use the standard prebuilt distribution.
+- The HLS/WebCodecs replay pipeline does not inherently require an FFmpeg executable: MP4Box.js parses fMP4 in the browser worker and WebCodecs performs H.264 decoding. This only removes FFmpeg from this particular replay path; it does not prove FFmpeg is unnecessary for every other possible media function.
+
+### Consequences
+
+- Pin MP4Box.js to a released version and bundle the exact prebuilt JS file locally for offline operation. Do not load from a CDN or resolve an npm package at runtime.
+- Include the BSD-3-Clause license and preserve required copyright/notice text in the distribution.
+- Audit the selected build artifact and all bundled runtime code; do not assume package-level devDependencies are shipped or that the package metadata alone completes the project's third-party license inventory.
+- Compare bundle size and extraction performance for `mp4box.simple` versus the full distribution before choosing.
+
+### Evidence
+
+- MP4Box.js v2.5.0 package metadata and BSD-3-Clause declaration: https://github.com/gpac/mp4box.js/blob/v2.5.0/package.json
+- MP4Box.js v2.5.0 license: https://github.com/gpac/mp4box.js/blob/v2.5.0/LICENSE
+- MP4Box.js browser/progressive parsing and extraction documentation: https://github.com/gpac/mp4box.js/tree/v2.5.0
