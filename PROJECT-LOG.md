@@ -2308,3 +2308,33 @@ C. Compare both with replay idle, active, overloaded and during reconnects. A re
 ### Evidence
 
 - MediaMTX v1.21.3 WebRTC H.264/H.265 stream conversion: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
+
+
+## 2026-11-15 — MediaMTX reader queue is a transient pending-work queue, not a replay time-shift buffer
+
+**Scope:** Exact v1.21.3 source inspection of global configuration defaults and per-reader queue implementation. No local configuration was changed.
+
+### Verified details
+
+- MediaMTX v1.21.3 sets global WriteQueueSize to 512 by default.
+- Each stream.Reader creates a ring buffer with that configured capacity. The ring buffer stores pending callback work for that reader; it is not a timestamp-indexed history of previously delivered video and it is not a 15-second replay store.
+- A queue-full condition causes that reader's pending callback to be discarded and increments the reader's outbound-frame-discard counter. The application must treat this as potential media discontinuity, not as a harmless drop.
+- The configured value 512 is a count of pending queue entries, not a guaranteed number of seconds. It must not be described as a replay buffer or converted to a time duration without validating the exact callback granularity and sustained input rate.
+- Increasing the queue size can absorb longer temporary stalls but can also retain more pending work and increase replay lag/memory. Decreasing it can cause earlier frame loss. The default is not automatically appropriate for a referee replay workload.
+
+### Consequence
+
+The separate replay WebRTC reader provides a useful isolation boundary, but JudoReplayKit still needs its own bounded, timestamped encoded-access-unit ring and decoder/frame cache. MediaMTX's reader queue only transports pending work from the shared stream to each reader; it does not supply the look-back history.
+
+### Required PoC checks
+
+1. Measure the actual number of reader queue entries per second for the intended H.264 source and confirm whether one entry corresponds to one access unit or another unit of work.
+2. Stall only the replay reader and record queue occupancy, discard counter, recovery time and live-reader latency.
+3. Tune queue size against measured transient stalls, but keep the actual replay history in a separate application-owned buffer with explicit age/byte limits.
+4. Verify that queue overflow invalidates the replay decoder dependency chain and is surfaced to the user until a valid keyframe and continuous decode are restored.
+
+### Evidence
+
+- MediaMTX v1.21.3 global WriteQueueSize default: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/conf/conf.go
+- MediaMTX v1.21.3 per-reader ring buffer: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 stream reader registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
