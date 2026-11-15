@@ -4266,3 +4266,43 @@ The source confirms separate reader queues and separate failure/restart lifecycl
 - MediaMTX v1.21.3 HLS automatic/on-demand muxer lifecycle and ten-second recreation pause: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/servers/hls/muxer.go
 - MediaMTX v1.21.3 stream reader ring buffer, callback worker, per-reader error channel and discard counter: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
 - MediaMTX v1.21.3 stream AddReader/RemoveReader and reader fan-out registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+
+## 2026-11-15 — MediaMTX fans out each media unit to independent reader queues without waiting for each callback
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 stream fan-out and reader queue implementation, cross-checked against the recorder and HLS callback registration. Source-level result only; no stress test or race-detector run has been performed.
+
+### Verified fan-out behaviour
+
+- SubStreamFormat.writeUnitInner() performs the stream-level transformations first: timestamp handling, format update, unit remuxing and any required RTP encoding. It then iterates the registered onDatas readers for that format.
+- For each registered reader, it creates a callback closure and calls that reader's push() method. Reader.push() attempts to enqueue the callback into that reader's own ring buffer. If the buffer is full, that reader's discard counter is incremented; the push does not wait for the callback to finish.
+- The callback worker executes asynchronously in Reader.runInner(). A callback error terminates that reader's worker and is reported through that reader's error channel. It is not returned synchronously from the callback worker to the source's SubStreamFormat.writeUnitInner() call.
+- The recorder and HLS muxer therefore receive callbacks through separate queues. A slow or failed reader has its own queue/discard/error lifecycle; the producer continues iterating over the other registered readers.
+- The callback closures capture the same *unit.Unit pointer for a given incoming unit. The built-in HLS callback passes its fields/payload to gohlslib, and the fMP4 recorder callback constructs recording samples from the same unit. The inspected call sites do not intentionally rewrite the unit.Unit fields after fan-out. Nevertheless, the shared pointer and payload slices make immutability an important invariant for any new replay callback.
+
+### What this proves—and what it does not
+
+- **Proven at source level:** queue capacity and callback execution are per reader; a full reader queue increments that reader's discard counter rather than blocking on that callback; callback errors are isolated to the reader worker's error channel.
+- **Not proven:** zero CPU interference, zero allocation/GC impact, zero lock contention, zero effect from the producer's fan-out loop, or guaranteed recording/live continuity under sustained load. Every incoming unit still incurs fan-out work for every registered reader, and each reader's queued closures retain references to the unit/payload until executed or discarded.
+- **Important implementation constraint:** a custom WebCodecs replay consumer must treat each received unit and its payload as immutable, or make a deliberate copy before mutation. It must also close/release every decoded VideoFrame and bound its own queue; otherwise it can create memory pressure even though MediaMTX's queue is independent.
+- This source inspection supports the conclusion that reader isolation is a real queue/error boundary, but it is not a substitute for measuring the complete application under two-camera load.
+
+### Required PoC tests
+
+1. Instrument one source unit with sequence/timestamp identity and verify that the recorder, HLS muxer and a test replay reader each receive the same ordered identities when all queues remain below capacity.
+2. Artificially slow only the replay reader until its ring buffer fills. Confirm its discard counter increases while recorder and HLS callbacks continue; compare source frame rate, live output, recording sample count and file growth.
+3. Artificially slow the recorder reader separately. Verify HLS/live continuity and record the expected recorder restart/gap behaviour if its callback itself returns an error.
+4. Run the Go race detector with concurrent recorder, HLS and replay callbacks. Include a test callback that attempts mutation only in an isolated test harness to confirm the shared-unit hazard is detected; production callbacks must remain read-only.
+5. Measure process CPU, heap, allocation rate, GC pauses and queue discards as each additional reader is enabled. Repeat with both cameras and a multi-hour soak.
+6. Verify that queue-full discard telemetry is surfaced honestly in the JudoReplayKit health UI; a green “recording” lamp must not imply that every frame was persisted if the recorder reader has discarded callbacks.
+
+### Assessment
+
+MediaMTX's fan-out design provides per-reader queue and callback-error isolation and does not synchronously wait for each reader callback. This is a strong architectural basis for independent replay, but resource contention and the shared-unit immutability invariant remain explicit test gates. Status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 per-format fan-out loop and asynchronous callback enqueue: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/sub_stream_format.go
+- MediaMTX v1.21.3 reader ring buffer, worker, error channel and per-reader discard counter: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 stream reader registration/removal: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
+- MediaMTX v1.21.3 recorder callback registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4.go
+- MediaMTX v1.21.3 HLS callback registration: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/hls/from_stream.go
