@@ -1663,3 +1663,15 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - Next gate: confirm the FFmpeg candidate archive SHA-256 against the downloaded release checksum manifest. If it matches, attempt GitHub Artifact Attestation verification against `FFmpeg-Builds/FFmpeg-Builds`; record an unavailable or failed attestation honestly.
 - Scope remains limited to isolated Rev.9 proof-of-concept preparation. The known-working `D:\\JudoReplayKit` installation and `D:\\JudoReplayKit_Rev8_Test` remain protected and untouched.
 - Overall status: **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.**
+
+
+## 2026-11-15 — FFmpeg archive checksum verified
+
+- The owner ran the SHA-256 comparison for candidate archive `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip` against the downloaded `checksums.sha256` manifest.
+- Expected SHA-256: `0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`.
+- Calculated SHA-256: `0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`.
+- Result: **CHECKSUM MATCH**. The downloaded archive matches the digest listed in the release checksum manifest.
+- The initial combined PowerShell paste caused a display/listing command parse error because the next variable assignment was concatenated to `LastWriteTime`; the checksum comparison was subsequently run separately and completed successfully. No checksum mismatch occurred.
+- This checksum comparison does not by itself authenticate the publisher or prove build provenance. Next gate: attempt GitHub Artifact Attestation verification for this exact archive against `FFmpeg-Builds/FFmpeg-Builds`.
+- The FFmpeg archive remains unextracted and unexecuted. No server has been started and no production or Rev.8 files, services, firewall rules, ports, or recordings have been changed.
+- Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock or full implementation.**
