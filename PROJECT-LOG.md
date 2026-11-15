@@ -2426,3 +2426,28 @@ The separate replay WebRTC reader provides a useful isolation boundary, but Judo
 - MediaMTX issue #6269, including maintainer response and broadcaster sample report: https://github.com/bluenviron/mediamtx/issues/6269
 - MediaMTX issue #6465, fMP4 placeholder SPS after restart: https://github.com/bluenviron/mediamtx/issues/6465
 - MediaMTX v1.21.3 release notes: https://github.com/bluenviron/mediamtx/releases/tag/v1.21.3
+
+
+## 2026-11-15 — MediaMTX reader queue capacity is shared across a reader session, not a video-frame budget
+
+**Scope:** Exact v1.21.3 source inspection of `internal/stream/reader.go` and `internal/stream/stream.go`. Source-level finding only; no runtime test or local changes.
+
+### Verified details
+
+- Each `Reader` owns one `ringbuffer.RingBuffer` and one worker goroutine. The ring buffer stores callback work (`func() error`), not a timestamped media history.
+- `Stream.AddReader()` assigns the stream-wide `WriteQueueSize` to the reader once, starts that one queue, then registers callbacks for every media/format that the reader requested.
+- Consequently, the queue capacity is shared by all registered tracks/formats within that reader session. It is not a separate 512-entry video queue per track, nor a 512-frame guarantee. Audio and video callback work can both consume the same reader queue capacity.
+- On overflow, the reader increments `outboundFramesDiscarded` and logs that the reader is too slow. This counter is useful but must not be treated as an exact count of only visible video frames without confirming the callback path and track mix.
+- The queue size is configured at stream level and copied into each Reader at registration. Changing the configured value therefore affects the capacity of each subsequently created reader, not the replay-history duration.
+
+### Consequences for JudoReplayKit
+
+- Do not convert `writeQueueSize: 512` into seconds or video frames. The effective capacity depends on how MediaMTX enqueues units/callbacks for the actual audio/video tracks and the source frame cadence.
+- The PoC must measure queue overflow with the actual source and track combination. Record reader-discard counter deltas, per-track callback rates if instrumented, browser decoded-frame continuity, and live latency.
+- If a replay reader is stalled, audio callbacks may contribute to the same queue pressure as video callbacks. Test with audio enabled and disabled as separate cases; do not tune based only on video-only synthetic input.
+- Keep the application's own replay history separate from this transient server queue.
+
+### Evidence
+
+- MediaMTX v1.21.3 reader queue implementation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
+- MediaMTX v1.21.3 reader registration and per-reader queue assignment: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
