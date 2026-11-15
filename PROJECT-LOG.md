@@ -1549,3 +1549,12 @@ Protected locations `D:\\JudoReplayKit` and `D:\\JudoReplayKit_Rev8_Test` remain
 - Reported file size: 28,734,316 bytes; LastWriteTime: 2026-11-15 16:09:53.
 - This confirms the local file's presence and reported size only. Its SHA-256 and authenticity/integrity remain unverified. Do not extract or execute it pending verification.
 - Still requested: local SHA-256 output and the complete setup script source, to inspect the failed checksum retrieval logic.
+
+
+### Addendum — MediaMTX archive SHA-256 calculated locally
+
+**Source:** User-provided PowerShell output, 2026-11-15.
+
+- Local SHA-256 for `mediamtx_v1.21.3_windows_amd64.zip`: `B2F5246B07CB72961DF03B8D5E8CAD43DC657BCF3F49A87BB031BDF22721AF74`.
+- The hash is now known, but it has not yet been verified against an authoritative publisher-controlled checksum or GitHub Artifact Attestation. A matching third-party package manifest is not sufficient proof on its own.
+- Archive remains unextracted and unused. Next required input: exact setup script source; then verify against the publisher's official mechanism before any extraction.
