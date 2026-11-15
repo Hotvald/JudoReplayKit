@@ -3279,3 +3279,27 @@ MediaMTX's 1-second RTCP Sender Reports plus Chromium's WebRTC captureTime metad
 - MediaMTX v1.21.3 recorder drift tolerance: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/recorder.go
 - Chromium remote WebRTC video frame NTP/captureTime mapping: https://chromium.googlesource.com/chromium/src/+/master/third_party/blink/renderer/modules/peerconnection/media_stream_remote_video_source.cc
 - WICG WebRTC requestVideoFrameCallback metadata: https://wicg.github.io/video-rvfc/
+## 2026-11-15 — MediaMTX fMP4 H.264 stores PTS offset separately from DTS
+
+**Scope:** Exact source inspection of MediaMTX v1.21.3 `internal/recorder/format_fmp4.go` and `format_fmp4_track.go`. Source-level timestamp mapping finding; no runtime PoC or local changes.
+
+### Verified H.264 recording behaviour
+
+- The fMP4 recorder initializes an H.264 DTS extractor at the first random-access access unit. For each subsequent H.264 access unit, it calls `DTSExtractor.Extract(payload, u.PTS)` to derive DTS.
+- The fMP4 sample is written with `PTSOffset = u.PTS - dts`, the derived `dts`, and `ntp = u.NTP`. Thus the recorder preserves presentation/decode offset explicitly; NTP is supplied from the stream unit's PTS-based NTP estimate.
+- The fMP4 track records the first sample's NTP and DTS as the segment's `startNTP` and `startDTS`. It checks that elapsed NTP and elapsed DTS remain within the configured 5-second drift tolerance; if the tolerance is exceeded, the track resets its segment/timeline state.
+- With a no-B-frame H.264 stream, PTS and DTS should coincide and `PTSOffset` should be zero. With B-frames, PTS and DTS differ; the bookmark's presentation time cannot be converted to MP4 decode time by simply subtracting elapsed time from `startDTS` without accounting for each sample's PTSOffset.
+- MediaMTX v1.21.3 WebRTC H.264 output rejects B-frame streams. Therefore a no-B-frame source is already a hard compatibility requirement for the proposed WebRTC replay path and also simplifies exact bookmark-to-fMP4 mapping.
+
+### Consequences for bookmarks and archive seeking
+
+1. Keep the bookmark's presentation timestamp/NTP as the event identity. Do not store only a raw MP4 DTS offset.
+2. For the required no-B-frame source, verify the recorder's H.264 `PTSOffset` is zero and the WebRTC RTP timestamp maps to the same PTS/NTP sample. This gives a straightforward archive lookup.
+3. If a future source contains B-frames, treat it as a separate unsupported/conditional path: preserve PTSOffset and map to the correct sample presentation time. Do not assume the WebRTC and fMP4 paths support the same bitstream.
+4. During the PoC, compare browser `captureTime`/RTP timestamp with the corresponding fMP4 sample's NTP, DTS and PTSOffset. Verify the exact displayed frame can be recovered from the archive after segment rotation/closure.
+
+### Evidence
+
+- MediaMTX v1.21.3 fMP4 H.264 DTS/PTSOffset/NTP sample creation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4.go
+- MediaMTX v1.21.3 fMP4 track startNTP/startDTS and drift validation: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/recorder/format_fmp4_track.go
+- MediaMTX v1.21.3 WebRTC H.264 B-frame restriction: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
