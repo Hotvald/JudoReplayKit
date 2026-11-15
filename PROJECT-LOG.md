@@ -2269,3 +2269,42 @@ C. Compare both with replay idle, active, overloaded and during reconnects. A re
 - MediaMTX v1.21.3 stream fan-out: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/stream.go
 - MediaMTX v1.21.3 per-reader queue: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/stream/reader.go
 - MediaMTX v1.21.3 WebRTC peer connection: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/peer_connection.go
+
+
+## 2026-11-15 — MediaMTX v1.21.3 WebRTC output explicitly rejects H.264/H.265 B-frame streams
+
+**Scope:** Direct inspection of MediaMTX v1.21.3 internal/protocols/webrtc/from_stream.go. This is an exact-version source finding, not a runtime test. No local camera or stream settings were changed.
+
+### Verified source behaviour
+
+- In the H.264 WebRTC output path, MediaMTX tracks the previous access unit presentation timestamp. If a later access unit has a lower PTS, the callback returns the explicit error "WebRTC doesn't support H264 streams with B-frames".
+- The H.265 WebRTC output path contains the equivalent check and explicit error for H.265 streams with B-frames.
+- This means that, for MediaMTX v1.21.3 WebRTC readers, a camera/source producing B-frame reordered H.264 or H.265 can cause the reader's stream callback to fail. This is not merely a concern about the independent WebCodecs decoder; it is a constraint in MediaMTX's own WebRTC output path.
+- The code does not prove that every H.264 camera uses B-frames. Many low-latency camera configurations use no B-frames, but the actual source encoder configuration must be checked rather than assumed.
+- The finding applies to the inspected WebRTC output path; it should not be generalized to every MediaMTX output protocol.
+
+### Consequences for JudoReplayKit
+
+- If MediaMTX v1.21.3 WebRTC is retained as the browser transport, the candidate camera/source encoder profile must be tested and likely configured for no B-frames (low-latency IPPP-style GOP) unless a different supported path is selected.
+- The PoC must inspect the actual camera stream for B-frame reordering and verify monotonic access-unit PTS at MediaMTX's WebRTC reader boundary.
+- This restriction may simplify exact frame order for the replay cache if B-frames are disabled, but it does not prove that RTP timestamp, PTS and capture-time mapping are equivalent. They remain separate timing concepts.
+- A camera app that does not expose B-frame controls may make this transport path unsuitable; do not assume the setting can be changed through the phone UI.
+- The replay/live isolation candidate remains a separate MediaMTX WebRTC reader, but it is conditional on a camera bitstream that MediaMTX can actually serve through WebRTC.
+
+### Required PoC checks
+
+1. Capture short sample streams from each intended camera app/source and inspect H.264/H.265 access units, PTS/DTS, GOP structure, IDR interval and whether B-frames occur.
+2. Test the exact samples through MediaMTX v1.21.3 WebRTC output with two independent readers.
+3. Confirm no callback errors, reader disconnects or frame drops caused by non-monotonic PTS.
+4. If the source uses B-frames, test whether the source can be configured to disable them without changing resolution, frame rate or unacceptable image quality.
+5. If B-frames cannot be disabled, compare an alternate browser delivery path or a media-server version/implementation that demonstrably supports the source's reordering. Do not assume the current v1.21.3 WebRTC path will work.
+
+### Assessment
+
+- This is a newly identified hard compatibility gate for the MediaMTX v1.21.3 WebRTC candidate.
+- The camera's actual GOP/B-frame behaviour must be verified before the WebRTC replay PoC can be considered viable.
+- No camera protocol or architecture is approved. Overall status remains **CONDITIONAL GO for isolated PoCs only; NO-GO for architecture lock/full implementation**.
+
+### Evidence
+
+- MediaMTX v1.21.3 WebRTC H.264/H.265 stream conversion: https://github.com/bluenviron/mediamtx/blob/v1.21.3/internal/protocols/webrtc/from_stream.go
