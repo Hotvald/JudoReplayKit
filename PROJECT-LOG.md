@@ -4809,3 +4809,29 @@ Source: https://github.com/bluenviron/mediamtx/issues/6468
 - The most important unresolved upstream concern for JudoReplayKit remains recording integrity under timestamp drift (#5550), alongside the already logged first-segment SPS issue (#6465). The LL-HLS playlist issue is a separate browser/player compatibility risk.
 - This review does **not** select v1.21.4 as the project's implementation baseline, change the Tool Setup draft, change configuration, or authorize a runtime test. The next relevant evidence must come from isolated PoCs using the actual camera protocol and target Windows environment.
 
+## 2026-11-16 — Tool Setup v0.2 availability clarification and local PoC1 inventory
+
+**Reason for this addendum:** The user reported that the standalone v0.2 PowerShell file described in the earlier entry could not be located. A read-only search was then performed on the user's PC, with the results pasted into this session.
+
+### v0.2 artifact availability
+
+- The exact filename `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.2.ps1` was not found in the following searched locations: the user's Downloads, Desktop, Documents, and `C:\JudoReplayKit_Rev9_Dev`.
+- A second read-only search in those same roots for filenames matching `Tool.?Setup|PoC1.*Tools|Download.*Tools` found only the v0.1 ZIP, the v0.1 script, and the PoC1 setup log.
+- A complete recursive file-and-directory inventory of `C:\JudoReplayKit_Rev9_Dev\PoC1`, including `-Force`, showed only `logs` and `tools\downloads`. No v0.2 script or other setup script was present in that PoC1 tree.
+- **Correction/qualification:** The earlier entry records that a v0.2 draft was authored and saved as a standalone artifact in the prior ChatGPT session. The current investigation has not located that artifact on the user's PC and cannot verify that it was successfully delivered, downloaded, or retained by the user. The historical authorship statement is retained, but must not be interpreted as proof of user receipt or current file availability. The draft must be treated as unavailable until its actual source file is recovered or it is recreated and explicitly delivered.
+
+### What the local PoC1 inventory established
+
+- The user has a v0.1 ZIP at `C:\Users\otval\Downloads\JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1.zip` (3,536 bytes) and its extracted script at `C:\Users\otval\Downloads\JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1\scripts\01-Download-PoC1-Tools.ps1` (5,939 bytes).
+- The local setup log `PoC1-Tool-Setup-20261115-160915.txt` records that the MediaMTX v1.21.3 ZIP download completed, followed by a STOP/ERROR while downloading/checking `mediamtx-checksums.sha256` because the file was considered missing or unexpectedly small.
+- The same local downloads directory currently contains the MediaMTX ZIP (28,734,316 bytes) and checksum file (715 bytes). Their creation/last-write timestamps are both 2026-11-15 16:09:xx; specifically, the checksum file timestamp is 16:09:54, the same second as the logged STOP/ERROR. This timestamp coincidence does not establish whether the script created the file before failing, nor whether its contents are valid.
+- The directory also contains an FFmpeg ZIP (168,582,040 bytes; creation 16:42:10, last write 16:45:54) and `ffmpeg-build-checksums.sha256` (5,728 bytes; creation/last write 16:45:54). These files appeared later on 2026-11-15, but the inventory does not identify which process or action created them.
+- No FFmpeg setup log or setup script was found in the PoC1 tree. File presence and timestamps alone do not prove checksum verification, safe extraction, executable validation, or successful tool setup.
+- Four preflight reports and the one setup log were present under `PoC1\logs`. No files were changed, executed, extracted, or deleted during this investigation.
+
+### Current decision and next actions
+
+- Tool Setup v0.1 remains **NO-GO** and must not be executed.
+- The downloaded ZIPs and checksum files remain untrusted/unverified pending explicit integrity and provenance checks. Do not execute or extract them as part of this investigation.
+- Recreate v0.2 as a new, clearly labelled review draft only after recovering and reviewing the exact v0.1 source and reconciling it with the requirements above. The recreated file must be explicitly delivered to the user and independently statically reviewed; it must not be run.
+- No runtime setup, service startup, synthetic stream, configuration edit, firewall change, or access to production `D:\JudoReplayKit` or Rev.8 was authorized or performed.
