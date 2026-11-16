@@ -4628,3 +4628,34 @@ The public FFmpeg-Builds release page confirms that tag `autobuild-2026-11-14-12
 This tool preparation step does not authorize server startup, synthetic streams, live-edge tests, configuration edits, or any access to production or Rev.8.
 
 **External source:** FFmpeg-Builds release listing, including the pinned 2026-11-14 12:37 asset: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases?expanded=true
+
+
+## 2026-11-16 — Tool Setup v0.2 draft authored; execution not approved
+
+**Source:** ChatGPT continuation session; v0.2 PowerShell draft prepared from the user-pasted complete v0.1 source and the requirements recorded above.
+
+**Artifact:** `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.2.ps1` was created as a standalone draft for the user. A ZIP package/README was not completed. The script was not run on the user's PC and no downloads, extraction, executable invocation, service changes, configuration changes, or access to production/Rev.8 occurred.
+
+### Design changes included in the draft
+
+- Fixed workspace `C:\\JudoReplayKit_Rev9_Dev`; checks the workspace and PoC1 directory for reparse points and refuses an existing final `PoC1\\tools`.
+- Creates a unique staging directory under `PoC1`; keeps downloads, logs and extracted payload separate from the final destination.
+- Obtains pinned release metadata from the GitHub REST API, selects exactly one asset by exact case-sensitive filename, and requires a SHA-256 digest and exact byte size.
+- MediaMTX requires the GitHub API asset digest, the official `checksums.sha256` manifest, a separately pinned third-party digest cross-check, and successful `gh attestation verify <archive> --repo bluenviron/mediamtx`. Failure is fail-closed.
+- FFmpeg uses the exact pinned release tag and asset, and requires the GitHub API asset digest. The draft explicitly records that this is not an independent third-party digest.
+- Inspects ZIP entries for traversal/absolute paths, symbolic links, excessive entry count and excessive expanded size before extraction.
+- Extracts only into staging; checks for exactly one expected executable of each kind; inventories and preserves FFmpeg notice/license/copyright files.
+- Runs the downloaded executables only for version/build metadata after verification. This is still code execution and must be clearly understood before the script is approved for use.
+- Writes a provenance JSON manifest and attempts a same-volume `[IO.Directory]::Move` promotion only after all checks; an existing destination causes a stop.
+- Retains staging evidence on failure and records stage, URL, file and exception where the log has been initialized.
+- Does not intentionally start MediaMTX, create streams, edit configuration, alter PATH/registry, install services, create firewall rules or scheduled tasks.
+
+### Review limitations and status
+
+- The script has not been parsed or executed by Windows PowerShell 5.1 in this session. Static source review remains necessary before any user execution.
+- A final file-path string cleanup was attempted after the first script file was successfully created, but the file-edit operation did not complete. The delivered standalone file therefore remains the earlier saved draft; its `TrimStart('\\\\')` expression should be checked and simplified to `TrimStart('\\')` if appropriate before approval.
+- The ZIP package and companion README were not created.
+- The GitHub API digest requirement is intentionally fail-closed: if the release metadata does not expose a SHA-256 digest for the pinned asset, setup stops rather than silently weakening verification.
+- The script's limited FFmpeg build-flag guard is not a complete legal audit.
+
+**Decision:** v0.2 is a draft for review only, not an approved installer. Do not run it yet. First complete the static review, correct the relative-path trimming expression, confirm PowerShell 5.1 syntax/behavior, and inspect the final artifact. Successful tool setup would still not authorize server startup, synthetic streams, live-edge testing, configuration edits, or any access to production/Rev.8.
