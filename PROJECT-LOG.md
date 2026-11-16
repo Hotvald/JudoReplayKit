@@ -4511,3 +4511,33 @@ The product acceptance basis remains unchanged: replay must show the actually av
 - FFmpeg-Builds release page showing the pinned 2026-11-14 12:37 release and the `n9.0.2-57-gd838f9f9ae` LGPL static Windows archive: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases
 - MediaMTX v1.21.3 Windows archive identity cross-check (third-party Scoop manifest): https://github.com/ScoopInstaller/Main/blob/master/bucket/mediamtx.json
 
+
+
+## 2026-11-16 — Rev.9 PoC 1 Preflight executed successfully
+
+**Source:** User-provided complete console output and contents of the generated preflight report.  
+**Environment:** User's Windows 10 Pro PC; isolated workspace `C:\\JudoReplayKit_Rev9_Dev`.  
+**Execution:** `00-PoC1-Preflight.ps1` v0.1 completed at 2026-11-16 16:13:26 +01:00. Report: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\logs\\PoC1-Preflight-20261116-161326.txt`.
+
+### Observed results
+
+- Host: `SURFACEPRO3I7`; Windows 10 Pro 10.0.19045; Windows PowerShell 5.1.19041.6456; 4 logical processors.
+- Workspace root resolved as `C:\\JudoReplayKit_Rev9_Dev`.
+- Top-level workspace contained the extracted `JudoReplayKit_Rev9_PoC1_Preflight` package and `PoC1` directory.
+- No FFmpeg, FFprobe or MediaMTX executable was found on PATH.
+- No relevant running processes were listed.
+- No common media TCP port listeners were listed.
+- C: drive capacity was reported as 231.9 GiB, with 115.63 GiB free.
+- The report explicitly states that no media or configuration contents were read; the production path `D:\\JudoReplayKit` and Rev.8 path `D:\\JudoReplayKit_Rev8_Test` were not accessed; and services, processes, firewall rules, ports and configuration were not changed.
+- The only script write was the preflight report under the isolated workspace's `PoC1\\logs` directory.
+
+### Assessment
+
+**Preflight v0.1 execution: PASS for the read-only inventory step.** The report is complete enough for the intended inventory and shows no observed running media services or listeners in the queried scope. This is not a functional test and does not prove the absence of every possible process, service, port or external connection. It does not validate replay, recording, stream isolation or performance.
+
+### Next action and safety gate
+
+Proceed to revise Tool Setup v0.1 before running it. The previously identified NO-GO issues remain: stage downloads and extraction in a unique temporary directory and promote only after complete verification; improve durable stage-specific failure reporting; strengthen MediaMTX publisher provenance verification (GitHub Attestation or independently pinned digest); and preserve upstream FFmpeg build identity and notices without overstating licensing verification.
+
+Do not run the original Tool Setup v0.1, start MediaMTX, generate test streams, modify configuration, or access production/Rev.8 as part of this next preparation step. Keep all changes confined to the isolated Rev.9 workspace. Production remains protected.
+
