@@ -4572,3 +4572,16 @@ Do not run the original Tool Setup v0.1, start MediaMTX, generate test streams, 
 - GitHub CLI attestation verification manual: https://cli.github.com/manual/gh_attestation_verify
 - Third-party independent MediaMTX archive hash cross-check: https://github.com/ScoopInstaller/Main/blob/master/bucket/mediamtx.json
 - Pinned FFmpeg-Builds release and archive identity: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/autobuild-2026-11-14-12-37
+
+
+## 2026-11-16 — GitHub CLI prerequisite confirmed on user PC
+
+**Source:** User-provided PowerShell output.
+
+- `gh --version` succeeded.
+- Installed GitHub CLI: `gh version 2.104.0 (2026-11-12)`.
+- This satisfies the local CLI availability prerequisite for the Tool Setup v0.2 MediaMTX attestation-verification path. It does not yet prove that the user is authenticated, that the attestation verification succeeds for the selected archive, or that downloads are accessible.
+- Next revision must check `gh` availability and run `gh attestation verify` against the downloaded MediaMTX archive before extraction/promotion. If verification fails, stop and preserve staged evidence; never fall back silently to checksum-only validation.
+- No services, processes or configuration were changed by this version check. No tool setup or download was run.
+
+**Decision:** Continue preparing/reviewing Tool Setup v0.2. User should not run v0.1 and should not yet run any setup script.
