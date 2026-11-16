@@ -4455,3 +4455,59 @@ This makes bookmark placement dependent on how quickly the official types the de
 - Archived Rev.8 app.js saves the later latestEnd as lastSpanEnd and computes recordingLag against the earlier clickTime: 02_CURRENT_APP_JS.txt, line 1202.
 - Archived Rev.8 app.js opens the drawer after bookmark creation: 02_CURRENT_APP_JS.txt, line 1199.
 - Archived Rev.8 app.js uses lastSpanEnd as the bookmark replay target: 02_CURRENT_APP_JS.txt, line 776.
+
+
+## 2026-11-16 — Rev.9 PoC 1 package review: Preflight and Tool Setup v0.1
+
+**Source:** Static review of the two user-supplied ZIP packages:
+- `JudoReplayKit_Rev9_PoC1_Preflight_v0.1(1).zip`
+- `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1(1).zip`
+
+**Review status:** Source code inspected; neither PowerShell script has been executed in this review. No user PC, Rev.9 workspace, Rev.8 installation, production installation, processes, ports, or recordings were accessed or changed.
+
+### 1. Preflight package — conditionally approved for the isolated inventory step
+
+The README and `00-PoC1-Preflight.ps1` agree on the following scope:
+- The root is hard-coded as `C:\JudoReplayKit_Rev9_Dev`.
+- The script refuses to continue if that directory is missing, is a reparse point, or resolves to a different path.
+- Its only intended write is a timestamped report under `C:\JudoReplayKit_Rev9_Dev\PoC1\logs\`.
+- It does not start, stop, restart, kill or configure services/processes; it does not read media contents or configuration contents; it does not intentionally access the known production or Rev.8 paths.
+- It inventories workspace files, selected executable/config names, PATH availability, matching running process metadata, selected TCP listeners and local fixed-disk free space.
+
+No source-level command was found that targets `D:\JudoReplayKit` or `D:\JudoReplayKit_Rev8_Test`. The script is therefore suitable for the next read-only preflight step, provided the user confirms that the isolated Rev.9 workspace already exists at the exact C: path. It must not be redirected to another folder.
+
+**Privacy note:** The report includes computer name, Windows username, process names/IDs/start times, local file paths and disk information. The README correctly instructs the user to inspect and redact the report before sharing it.
+
+**Limitations:** This is an inventory, not a functional validation. A process or listening port does not prove that a stream, recording or replay works. Some CIM/network inventory commands can fail due to system policy; the script has limited handling for the TCP-listener query and may stop on other inventory errors. That is acceptable for a preflight, but an incomplete report must be treated as incomplete rather than as a pass.
+
+### 2. Tool Setup package — not approved to run yet
+
+The script is confined to `C:\JudoReplayKit_Rev9_Dev\PoC1\tools`, refuses to proceed if that tools directory already exists, does not modify PATH or registry, and does not start MediaMTX or open ports. It downloads:
+- MediaMTX v1.21.3 Windows amd64 from the official `bluenviron/mediamtx` GitHub release.
+- A pinned FFmpeg-Builds Windows x86_64 LGPL-labelled static archive from the `autobuild-2026-11-14-12-37` release.
+
+The MediaMTX v1.21.3 release exists, and the exact Windows amd64 archive name used by the script is consistent with the official release naming. The official MediaMTX release documentation describes checksum verification and GitHub Attestations; the setup script currently downloads the checksum manifest over HTTPS and compares SHA-256, but does not verify the GitHub Attestation. The FFmpeg-Builds release page confirms the named 9.0 build and LGPL static archive. These external checks confirm release/asset identity, not the actual bytes downloaded on the user's PC.
+
+#### Issues to fix before execution
+
+1. **Partial setup blocks retry.** The script creates the tools directory before downloads and extraction. If any download, manifest lookup, checksum comparison, extraction or executable check fails, the catch block exits but leaves the tools directory and partial files in place. A second run then refuses because the directory exists. Add a safe failure strategy: stage downloads/extraction in a unique temporary directory inside the approved PoC1 workspace, verify everything, then promote to `tools` only when complete; never delete or overwrite an existing directory. If a failed staging folder is retained for diagnosis, report its exact path and how to inspect it.
+2. **Checksum provenance is limited.** The archive and checksum manifest are fetched from the same release host/repository. This detects transfer corruption and mismatched files, but is not independent publisher authentication. For MediaMTX, prefer verifying the published GitHub Attestation (or compare against an independently pinned, previously verified digest) in addition to the checksum file. Do not imply that the current manifest comparison alone proves publisher identity.
+3. **FFmpeg licensing label is not fully established by the current check.** The script rejects build configuration strings containing `--enable-gpl` or `--enable-nonfree`, which is a useful guard, but this alone is not a complete legal audit of every linked component or redistribution obligation. Preserve the exact build identity and build configuration, and retain the upstream license/notices with the test tools. Do not describe the binary as legally verified solely because those two flags are absent.
+4. **No post-failure cleanup/reporting strategy.** In addition to the staging issue, the current catch path does not clearly distinguish a failed download, failed checksum, failed extraction or failed executable validation in a durable summary beyond the console/log message. Improve the log so it records the stage and exact failing file without deleting evidence.
+5. **No tool execution has been authorized by this review.** The setup script is not a server launcher, but it does download and extract large executable archives and run their version/build-information commands. It must remain a separate step after the preflight report is inspected.
+
+### 3. Decision and next sequence
+
+- **Preflight v0.1:** Conditional GO for a read-only run against the already-existing `C:\JudoReplayKit_Rev9_Dev` directory only. Inspect/redact its report before sharing.
+- **Tool Setup v0.1:** NO-GO pending the staging/retry fix and stronger provenance handling described above.
+- **PoC 1 live-edge test:** Not ready. Do not start MediaMTX, send synthetic streams, edit configuration, or test against production/Rev.8 as part of these package steps.
+
+The product acceptance basis remains unchanged: replay must show the actually available recent interval while the recording segment is still being written; continuous recording must keep progressing on both cameras; replay must not interrupt live output or recording. A successful download, HTTP response, process state or file-size increase alone is not a PoC PASS.
+
+### Evidence and external source checks
+
+- MediaMTX v1.21.3 release and release notes: https://github.com/bluenviron/mediamtx/releases
+- MediaMTX official binary security and GitHub Attestation guidance: https://mediamtx.org/docs/misc/security
+- FFmpeg-Builds release page showing the pinned 2026-11-14 12:37 release and the `n9.0.2-57-gd838f9f9ae` LGPL static Windows archive: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases
+- MediaMTX v1.21.3 Windows archive identity cross-check (third-party Scoop manifest): https://github.com/ScoopInstaller/Main/blob/master/bucket/mediamtx.json
+
