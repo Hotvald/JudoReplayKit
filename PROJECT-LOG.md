@@ -4705,6 +4705,8 @@ Source: https://github.com/bluenviron/mediamtx/pull/6464
 Sources:
 - https://github.com/bluenviron/mediacommon/issues/404
 - https://github.com/bluenviron/mediacommon/blob/v2.10.0/internal/mp4/codec_boxes.go
+- https://github.com/bluenviron/gortmplib/pull/154
+- https://github.com/bluenviron/gortmplib/blob/v1.0.6/writer.go
 - https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
 
 #### 4. MPEG-TS timestamp behavior changed in mediacommon 2.10.0
