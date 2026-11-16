@@ -4714,7 +4714,7 @@ Sources:
 Sources:
 - https://github.com/bluenviron/mediacommon/issues/406
 - https://github.com/bluenviron/mediacommon/blob/v2.10.0/pkg/formats/mpegts/reader.go
-- https://github.com/bluenviron/gohlslib/commit/1e8c8fcbf782833ed83909809e50585a25054e76
+- https://github.com/bluenviron/gohlslib/pull/418
 - https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
 
 #### 5. Security hygiene and licensing
