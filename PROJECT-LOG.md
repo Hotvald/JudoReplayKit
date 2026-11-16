@@ -4669,6 +4669,7 @@ This tool preparation step does not authorize server startup, synthetic streams,
 - **Latest official release at review time: MediaMTX v1.21.4**, published 2026-11-15 13:33 UTC. The release points to signed, GitHub-verified commit `e65f9411a56b19076a0dfde1fb4a59414bdf642c`.
 - The previously reviewed v1.21.3 candidate is no longer the latest release. Current `main` was only one commit ahead of v1.21.4 at review time; that commit (`42e79d0`) only moved documentation text.
 - v1.21.4 updates the principal media dependencies from the v1.21.3 pins: gohlslib 2.4.7 → 2.4.8; gortmplib 1.0.5 → 1.0.6; gortsplib 5.6.7 → 5.7.0; mediacommon 2.9.7 → 2.10.0; Pion ICE 4.4.8 → 4.4.9; Pion WebRTC 4.2.24 → 4.2.26; gosrt 0.12.0 → 0.13.0.
+- MediaMTX's bundled hls.js is also updated from v1.7.3 to v1.7.4. The official hls.js v1.7.4 release includes LL-HLS part-loading/playlist-position fixes and a fix for H.264 parameter-set truncation. This applies to MediaMTX's bundled web player; it does not prove that JudoReplayKit's own player asset is v1.7.4, and it does not fix the server-side PART-TARGET issue #6237.
 - Pion WebRTC v4.2.26 is an official release (2026-10-28) containing a fix for a local-description SDP mutation race. This is a signaling/concurrency fix, not a change to RTP reader queues or media fan-out.
 - MediaMTX pins the Pion ICE v4.4.9 tag, but no matching GitHub Release entry was found (the Pion ICE releases page still lists v4.4.8 as latest). The tagged v4.4.9 `udp_mux.go` has the same blob SHA as v4.4.8, so this dependency bump does not itself change the shared UDP-mux write path. The new MediaMTX `udpWriteBufferSize` setting is therefore the identified mitigation for #6100; no Pion ICE write-deadline fix was found in the pinned source.
 - The v1.21.4 README still describes MediaMTX as a zero-dependency single executable compatible with Linux, Windows and macOS. No breaking OS-specific deployment change was identified in the release notes; the Windows #6468 RTSP report below is sparse and protocol-specific. The release workflow builds binaries and publishes checksums/attestations. Windows socket-buffer behavior remains untested in this review.
@@ -4711,6 +4712,7 @@ Sources:
 - https://github.com/bluenviron/gortmplib/pull/154
 - https://github.com/bluenviron/gortmplib/blob/v1.0.6/writer.go
 - https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
+- https://github.com/video-dev/hls.js/releases/tag/v1.7.4
 - https://github.com/pion/webrtc/releases/tag/v4.2.26
 - https://github.com/pion/webrtc/commit/0e35f8059c5a7cb2002b53f8b2017f8148ee2fc7
 - https://github.com/pion/ice/blob/v4.4.8/udp_mux.go
