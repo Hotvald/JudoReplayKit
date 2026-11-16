@@ -4835,3 +4835,36 @@ Source: https://github.com/bluenviron/mediamtx/issues/6468
 - The downloaded ZIPs and checksum files remain untrusted/unverified pending explicit integrity and provenance checks. Do not execute or extract them as part of this investigation.
 - Recreate v0.2 as a new, clearly labelled review draft only after recovering and reviewing the exact v0.1 source and reconciling it with the requirements above. The recreated file must be explicitly delivered to the user and independently statically reviewed; it must not be run.
 - No runtime setup, service startup, synthetic stream, configuration edit, firewall change, or access to production `D:\JudoReplayKit` or Rev.8 was authorized or performed.
+
+
+## 2026-11-16 — Addendum: v0.1 checksum-manifest size-check defect and v0.2 draft correction
+
+**Source:** Exact v0.1 PowerShell source and SHA-256 supplied by the user in the project conversation; local setup log and file inventory supplied by the user. This is a static source review, not an execution test.
+
+### Confirmed v0.1 defect
+
+The v0.1 helper `Download-File` applies this post-download condition to every file:
+
+```powershell
+if (-not (Test-Path -LiteralPath $Path) -or (Get-Item -LiteralPath $Path).Length -lt 1024) {
+    throw "Download missing or unexpectedly small: $Path"
+}
+```
+
+This treats every file smaller than 1,024 bytes as a failed download. The MediaMTX published checksum manifest in the user's local inventory is 715 bytes. The setup log records the manifest download attempt and STOP/ERROR at 16:09:54; the local manifest file's timestamp is also 16:09:54. The source-level defect therefore explains the reported stop: a successfully downloaded, valid small checksum manifest would still be rejected solely because of its size. This is a confirmed code defect; whether the specific local 715-byte file is authentic and complete remains unverified.
+
+The minimum-size check is not a valid general-purpose download-integrity check. A corrected implementation must distinguish expected small text manifests from large archives and validate each artifact using its expected publisher checksum, release metadata, and/or other appropriate provenance evidence. A non-zero file-size check alone is insufficient.
+
+### v0.1 disposition and remaining issues
+
+- v0.1 remains **NO-GO**. Do not execute it.
+- Its direct writes into the final tools directory, lack of staged/atomic promotion, lack of ZIP-entry safety inspection, and execution of downloaded binaries for version/build-configuration checks remain review concerns.
+- Existing downloaded archives and manifests remain untrusted until independently verified. No extraction or execution is authorized by this addendum.
+
+### Correction concerning the first v0.2 review draft
+
+A first v0.2 draft was generated in a prior assistant tool session, but the file is not available in the current working container for inspection. The earlier assistant statement that no file had been created was incorrect; creation had succeeded in that prior tool session. However, the draft had a statically identified blocking defect: it called a `Download-File` helper that was not defined. It must not be used or run. The artifact must be recreated in the current session, reviewed, and explicitly delivered before it can be treated as an available review draft.
+
+### Safety
+
+No PowerShell script was run. No archive was extracted. No downloaded executable was started. No services, streams, firewall rules, configuration, registry, production installation, or Rev.8 installation were changed. This entry is an append-only clarification and does not authorize runtime activity.
