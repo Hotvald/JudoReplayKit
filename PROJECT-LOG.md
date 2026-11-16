@@ -4585,3 +4585,46 @@ Do not run the original Tool Setup v0.1, start MediaMTX, generate test streams, 
 - No services, processes or configuration were changed by this version check. No tool setup or download was run.
 
 **Decision:** Continue preparing/reviewing Tool Setup v0.2. User should not run v0.1 and should not yet run any setup script.
+
+
+## 2026-11-16 — Direct source review of Tool Setup v0.1 script
+
+**Source:** Complete PowerShell source pasted by the user from:
+`C:\\Users\\otval\\Downloads\\JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.1\\scripts\\01-Download-PoC1-Tools.ps1`.
+**Review type:** Static source review only. The script was not executed. No downloads, extraction, executable invocation, service changes, configuration changes or access to production/Rev.8 occurred.
+
+### Confirmed script behavior
+
+- Hard-codes the Rev.9 workspace as `C:\\JudoReplayKit_Rev9_Dev`.
+- Checks that the workspace exists and is not itself a reparse point.
+- Refuses to proceed if `PoC1\\tools` already exists.
+- Creates `PoC1\\tools`, `tools\\downloads`, and the log directory before attempting downloads.
+- Downloads MediaMTX v1.21.3 Windows amd64 archive and its `checksums.sha256` from the official GitHub release.
+- Downloads the pinned FFmpeg-Builds archive `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip` from tag `autobuild-2026-11-14-12-37`, plus a file named `checksums.sha256`.
+- Searches each manifest for a line containing the expected asset name, parses either a 64-character SHA-256 line or a `SHA256 (file) = hash` line, then compares the local archive hash.
+- Extracts both archives into the final `tools` tree, recursively searches for the executables, invokes MediaMTX `--version`, FFmpeg `-version` and `-buildconf`, and saves the FFmpeg build configuration.
+- Rejects a build configuration containing `--enable-gpl` or `--enable-nonfree`.
+- Does not intentionally start a MediaMTX server, create a stream, add firewall rules, edit PATH or registry, or create a service.
+
+### Confirmed NO-GO reasons
+
+1. **Final destination is created too early.** The script creates `PoC1\\tools` before any download or verification. Any failure leaves a partial final directory; later runs refuse because it exists. This is the primary retry/atomicity defect.
+2. **No staging/promotion boundary.** Downloads, extraction and validation all occur inside the final destination. A complete verified payload is not promoted atomically.
+3. **No GitHub Attestation verification.** MediaMTX checksum-manifest comparison alone does not implement the upstream-recommended attestation check. The v0.2 design must call `gh attestation verify <archive> --repo bluenviron/mediamtx` and fail closed if it fails.
+4. **Failure reporting is insufficient.** The catch block records only the exception message, not a reliable named stage, current URL/file, and preserved unique staging path. The log itself is created only after several directories have already been created.
+5. **FFmpeg licensing conclusion is too broad if presented as legal verification.** The two build-flag checks are only a technical guard. Preserve build identity and upstream license/notice files, and state that this is not a complete legal audit.
+6. **Manifest handling needs stricter validation.** It takes the first line containing the filename and does not reject ambiguous duplicate entries or validate that the parsed filename exactly equals the pinned asset name. v0.2 should require one unambiguous exact-name entry and log the source manifest URL and digest.
+7. **No archive-content safety inventory.** Before extraction, v0.2 should inspect archive entries for unexpected absolute paths, parent traversal, or unexpected top-level layout; extraction must remain inside the unique staging directory.
+8. **No complete final-payload acceptance report.** v0.2 should record exact versions, archive hashes, attestation result, executable paths, build configuration, preserved notice/license files, and final promotion result.
+
+### Asset identity cross-check
+
+The public FFmpeg-Builds release page confirms that tag `autobuild-2026-11-14-12-37` contains the exact pinned 9.0 build identity `n9.0.2-57-gd838f9f9ae` and the Windows x86_64 LGPL static archive name used by v0.1. This confirms the asset naming/release selection, not the downloaded archive bytes or a full licensing audit.
+
+### Decision and next step
+
+**Tool Setup v0.1 remains NO-GO. Do not execute it.** Prepare v0.2 as a separate script with unique staging under `PoC1`, strict path and archive-entry checks, exact manifest parsing, MediaMTX checksum plus GitHub Attestation verification, FFmpeg provenance/notice retention, stage-specific logs, and a no-overwrite same-volume promotion to `PoC1\\tools` only after all checks pass. A failure must preserve staging evidence and must not leave a partial final `tools` directory.
+
+This tool preparation step does not authorize server startup, synthetic streams, live-edge tests, configuration edits, or any access to production or Rev.8.
+
+**External source:** FFmpeg-Builds release listing, including the pinned 2026-11-14 12:37 asset: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases?expanded=true
