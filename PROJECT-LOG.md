@@ -4659,3 +4659,138 @@ This tool preparation step does not authorize server startup, synthetic streams,
 - The script's limited FFmpeg build-flag guard is not a complete legal audit.
 
 **Decision:** v0.2 is a draft for review only, not an approved installer. Do not run it yet. First complete the static review, correct the relative-path trimming expression, confirm PowerShell 5.1 syntax/behavior, and inspect the final artifact. Successful tool setup would still not authorize server startup, synthetic streams, live-edge testing, configuration edits, or any access to production/Rev.8.
+
+## 2026-11-16 — MediaMTX v1.21.4 upstream release and issue review
+
+**Scope and method:** Reviewed the official MediaMTX release and tag, tagged configuration and source, current `main`, the relevant gohlslib and mediacommon tagged sources, upstream issues/PRs, the published security-advisory list, and the MediaMTX license. This was an upstream-only review. No local installations, services, processes, configurations, recordings, or protected folders were accessed or changed. No implementation or architecture decision was made.
+
+### Release status and exact baseline
+
+- **Latest official release at review time: MediaMTX v1.21.4**, published 2026-11-15 13:33 UTC. The release points to signed, GitHub-verified commit `e65f9411a56b19076a0dfde1fb4a59414bdf642c`.
+- The previously reviewed v1.21.3 candidate is no longer the latest release. Current `main` was only one commit ahead of v1.21.4 at review time; that commit (`42e79d0`) only moved documentation text.
+- v1.21.4 updates the principal media dependencies from the v1.21.3 pins: gohlslib 2.4.7 → 2.4.8; gortmplib 1.0.5 → 1.0.6; gortsplib 5.6.7 → 5.7.0; mediacommon 2.9.7 → 2.10.0; Pion ICE 4.4.8 → 4.4.9; Pion WebRTC 4.2.24 → 4.2.26; gosrt 0.12.0 → 0.13.0.
+- The isolated PoC Tool Setup draft recorded earlier still pins v1.21.3. It was not edited as part of this review.
+
+### Material released changes
+
+#### 1. WebRTC UDP write-buffer control — issue #6100 closed by a released fix
+
+- MediaMTX v1.21.4 adds the global `udpWriteBufferSize` setting through PR #6441. The upstream issue #6100 described a shared WebRTC ICE UDP-mux socket whose small OS-default send buffer could block writes and convoy unrelated ICE agents/readers; the reporter supplied macOS socket evidence and estimated similarly small Windows defaults.
+- The v1.21.4 source applies a non-zero value to the shared WebRTC UDP mux socket before constructing the ICE UDP mux, and the WebRTC network wrapper applies it to other UDP sockets as well.
+- **Important qualification:** the documented/default value is `0`, meaning “leave the operating-system default in place”. The release therefore adds a control; it does not automatically increase the buffer. The Windows default-size claim in #6100 is the reporter's observation/estimate, not a Windows reproduction verified in this review.
+- This is a socket-buffer mitigation, not a change to MediaMTX's independent per-reader queues or proof of per-reader transport isolation. It should be measured with the actual Windows host, two camera paths, and the expected simultaneous readers before relying on it.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
+- https://github.com/bluenviron/mediamtx/issues/6100
+- https://github.com/bluenviron/mediamtx/pull/6441
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/mediamtx.yml
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/servers/webrtc/server.go
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/protocols/webrtc/net.go
+
+#### 2. WebRTC now respects the configured UDP payload ceiling
+
+- PR #6464, included in v1.21.4, makes WebRTC packetization respect `udpMaxPayloadSize`. The documented default remains 1452 bytes; a lower value can be configured for low-MTU paths such as VPNs/tunnels.
+- This is relevant to packet fragmentation/loss on constrained networks, but does not change the normal default or the reader-queue model. The local tournament LAN's actual MTU and any VPN path still need measurement.
+
+Source: https://github.com/bluenviron/mediamtx/pull/6464
+
+#### 3. H.265 fMP4 initialization metadata correction
+
+- v1.21.4 updates mediacommon to v2.10.0. Its H.265 `hvcC` generation now removes emulation-prevention bytes from the SPS before extracting the 48-bit general-constraint indicator. The v2.9.7 code used by v1.21.3 did not perform this correction.
+- This is a released H.265 MP4/fMP4 compatibility fix. It does not establish that every camera's HEVC profile, parameter-set arrangement, or browser decoder will work; actual camera SPS/PPS/VPS and generated init segments still require validation.
+
+Sources:
+- https://github.com/bluenviron/mediacommon/issues/404
+- https://github.com/bluenviron/mediacommon/blob/v2.10.0/internal/mp4/codec_boxes.go
+- https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
+
+#### 4. MPEG-TS timestamp behavior changed in mediacommon 2.10.0
+
+- The MPEG-TS reader no longer rebases incoming timestamps to zero; it passes them through. This affects MPEG-TS/SRT inputs and may change the starting PTS/time origin observed by downstream consumers.
+- gohlslib 2.4.8 separately restores zero-based rebasing for its HLS client after the mediacommon change, to keep HLS-source playback compatible. This is a source-specific distinction: it must not be generalized to RTMP or WebRTC input.
+- For any JudoReplayKit path using SRT/MPEG-TS, test PTS origin, restart/discontinuity handling, and two-camera offset before interpreting timestamps as a common event clock.
+
+Sources:
+- https://github.com/bluenviron/mediacommon/issues/406
+- https://github.com/bluenviron/mediacommon/blob/v2.10.0/pkg/formats/mpegts/reader.go
+- https://github.com/bluenviron/gohlslib/commit/1e8c8fcbf782833ed83909809e50585a25054e76
+- https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
+
+#### 5. Security hygiene and licensing
+
+- v1.21.4 avoids writing arbitrary JSON request bodies (including Control API/authentication passwords and tokens) to debug logs, and redacts additional secrets and credentials from API output. This is a useful hardening change if API/debug logging is enabled.
+- The currently published MediaMTX advisories reviewed have patched ranges below v1.21.4. In particular: the legacy playback-authorization issue GHSA-jh89-m3cv-fmv2 is patched from v1.21.2; the Control API CSRF issue GHSA-w334-5mp5-h897 from v1.21.1; and the zero-length RTMP H.264/H.265 parameter-set crash advisories from v1.21.0. The listed MoQ parsing/memory advisories are also patched in earlier releases; they remain relevant only if MoQ is exposed/used, but v1.21.4 is beyond their published affected ranges.
+- MediaMTX's `LICENSE` file is byte-identical between v1.21.3 and v1.21.4 (same Git blob SHA); it remains MIT. This is not a complete audit of every transitive dependency's license obligations.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/security/advisories
+- https://github.com/bluenviron/mediamtx/security/advisories/GHSA-jh89-m3cv-fmv2
+- https://github.com/bluenviron/mediamtx/security/advisories/GHSA-w334-5mp5-h897
+- https://github.com/bluenviron/mediamtx/security/advisories/GHSA-5jgv-c722-r5cg
+- https://github.com/bluenviron/mediamtx/security/advisories/GHSA-7498-vjgw-9cr2
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/LICENSE
+
+### Open upstream reports and unresolved risks
+
+#### HIGH — recording-integrity risk: recorder time drift (#5550)
+
+- Issue #5550 remains open and was updated with further reports through 2026-11-13. One user reported a 64-minute session in which the fMP4 archive covered only 2 minutes 14 seconds, with about 55 minutes during which no segment file was written after a drift reset. Other users independently reported repeated drift resets and late-sample discards on RTSP-camera/republisher paths, sometimes producing many short segments.
+- The reports are user observations, not a maintainer-confirmed universal reproduction. Their proposed root causes differ, so they must not be collapsed into one proven explanation.
+- The v1.21.4 recorder source still defines `ntpDriftTolerance = 5 seconds`. The fMP4 track code still resets when elapsed NTP and DTS diverge beyond that tolerance, discards samples whose DTS would produce a negative fMP4 base time, and selects the next segment start only among tracks within `maxBasetime = 1 second` of the most advanced track. These source facts make the reported failure mode important to test, but do not prove that every reset causes prolonged data loss.
+- **JudoReplayKit consequence:** continuous live output is not evidence that the archive is complete. Test the actual direct camera publishing protocol and both cameras over long runs; compare wall-clock session duration, recorder logs, segment coverage, decoded frame count and audio/video timelines. Keep this as a high-priority recording-integrity gate until measured.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/issues/5550
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/recorder/recorder.go
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/recorder/format_fmp4_track.go
+
+#### MEDIUM — LL-HLS playlist stability issue remains unreleased (#6237 / gohlslib #398)
+
+- MediaMTX issue #6237 remains open. It reports changing `PART-TARGET`/`PART-HOLD-BACK` values and a separate delta-playlist Skip-Boundary problem; the report includes an independent reproduction of the first defect.
+- gohlslib PR #398 proposes to freeze `PART-TARGET` and move samples across part boundaries without dropping them, but the PR remains open. Tagged gohlslib v2.4.8 still contains the old part-target recomputation/mutation code, so this fix is **not** in the current MediaMTX release.
+- The reported permanent playback failure is demonstrated for Apple CoreMedia/Safari and also describes hls.js audio-part errors. It is not proof that the custom MP4Box.js worker will fail in the same way. The project's existing plan to request a full playlist and avoid `_HLS_skip` avoids the reported delta-playlist path, but does not by itself fix changing part-target metadata.
+- Treat this as an HLS-player compatibility gate, not as evidence against the separate WebRTC path.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/issues/6237
+- https://github.com/bluenviron/gohlslib/pull/398
+- https://github.com/bluenviron/gohlslib/blob/v2.4.8/muxer_stream.go
+
+#### LOW-CONFIDENCE WATCH — long-uptime Go runtime livelock report (#6454)
+
+- Issue #6454 remains open and has no maintainer-confirmed reproduction in the material reviewed. The reporter describes one v1.21.2/Go 1.27.2 Linux deployment that, after about eight days, entered a roughly 9-hour-42-minute CPU livelock in Go's GC memory-limit accounting; all application I/O stopped. The reporter is also investigating possible host hardware/memory corruption.
+- The impact would be severe if reproducible, but the evidence is a single incident and does not establish a MediaMTX defect or that v1.21.4 is affected. Keep it as a long-uptime observation item, not a confirmed blocker.
+
+Source: https://github.com/bluenviron/mediamtx/issues/6454
+
+#### Existing H.264 first-segment issue #6465 — status unchanged
+
+- The previously logged placeholder-SPS report remains open. Direct source comparison confirms that v1.21.4 and current `main` still contain the fallback `h264DefaultSPS` when the track description lacks SPS/PPS, and the fMP4 init is written when the first part closes. No fix was found in v1.21.4.
+- This is already documented in the 2026-11-15 entry “Additional MediaMTX H.264 compatibility gates: multiple PPS and fMP4 placeholder SPS”; this entry records only the status recheck, not a new finding.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/issues/6465
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/recorder/format_fmp4.go
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/recorder/format_fmp4_segment.go
+
+#### Low-confidence Windows-specific report (#6468)
+
+- Issue #6468 reports RTSP playback stopping after 22 seconds with MediaMTX v1.21.3 on Windows amd64 and PotPlayer. It contains no logs or diagnostic evidence and remains open. It is specifically an RTSP/PotPlayer report, not the HTTP Playback or WebRTC/LL-HLS replay paths under review, so applicability to JudoReplayKit is presently low.
+
+Source: https://github.com/bluenviron/mediamtx/issues/6468
+
+### Areas rechecked with no new change in v1.21.4
+
+- The v1.21.3 and v1.21.4 `internal/stream/reader.go` files have the same blob SHA, as do the WebRTC outbound-track files. No new per-reader queue/discard semantics, H.264 B-frame policy, late-reader GOP pre-roll, or reader-triggered keyframe-request change was found in this release.
+- H.264 recovery-point SEI random-access handling and the H.265 random-access classification were already present in the v1.21.3 dependency set; they are not new v1.21.4 fixes.
+- gohlslib v2.4.8's disk-backed `part_disk.go` has the same blob SHA as v2.4.7. The previously logged unsynchronized part-buffer/finalization race therefore remains unfixed in this release.
+- The current MediaMTX license is unchanged MIT. The release continues to publish checksums and GitHub Attestations for its binaries.
+
+### Assessment and safety status
+
+- v1.21.4 is the current upstream release and contains useful WebRTC UDP-buffer, H.265 fMP4-header, timestamp-path and security-hygiene changes.
+- The new UDP write-buffer setting is opt-in in practice because its default remains `0`; Windows multi-reader behavior is not runtime-proven.
+- The most important unresolved upstream concern for JudoReplayKit remains recording integrity under timestamp drift (#5550), alongside the already logged first-segment SPS issue (#6465). The LL-HLS playlist issue is a separate browser/player compatibility risk.
+- This review does **not** select v1.21.4 as the project's implementation baseline, change the Tool Setup draft, change configuration, or authorize a runtime test. The next relevant evidence must come from isolated PoCs using the actual camera protocol and target Windows environment.
+
