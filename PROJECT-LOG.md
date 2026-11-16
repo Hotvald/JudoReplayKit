@@ -4698,7 +4698,9 @@ Source: https://github.com/bluenviron/mediamtx/pull/6464
 #### 3. H.265 fMP4 initialization metadata correction
 
 - v1.21.4 updates mediacommon to v2.10.0. Its H.265 `hvcC` generation now removes emulation-prevention bytes from the SPS before extracting the 48-bit general-constraint indicator. The v2.9.7 code used by v1.21.3 did not perform this correction.
-- This is a released H.265 MP4/fMP4 compatibility fix. It does not establish that every camera's HEVC profile, parameter-set arrangement, or browser decoder will work; actual camera SPS/PPS/VPS and generated init segments still require validation.
+- The same class of correction is present in gortmplib v1.0.6's RTMP H.265 `hvcC` generator: v1.0.5 copied `sps[7:13]`, while v1.0.6 removes emulation-prevention bytes and reads RBSP bytes 8–13, also filling profile-space and tier fields. This is a separate RTMP writer/configuration path from mediacommon's MP4/fMP4 path.
+- mediacommon v2.10.0 also fixes H.264 SPS width parsing when `ChromaArrayType = 0` (monochrome streams).
+- These are released codec-container compatibility fixes. They do not establish that every camera's HEVC/H.264 profile, parameter-set arrangement, or browser decoder will work; actual camera SPS/PPS/VPS and generated init segments still require validation.
 
 Sources:
 - https://github.com/bluenviron/mediacommon/issues/404
