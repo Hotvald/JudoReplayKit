@@ -4541,3 +4541,34 @@ Proceed to revise Tool Setup v0.1 before running it. The previously identified N
 
 Do not run the original Tool Setup v0.1, start MediaMTX, generate test streams, modify configuration, or access production/Rev.8 as part of this next preparation step. Keep all changes confined to the isolated Rev.9 workspace. Production remains protected.
 
+
+
+## 2026-11-16 — Follow-up provenance checks for Tool Setup v0.2
+
+**Source:** Official MediaMTX security/release documentation and public GitHub release metadata checked during the continuation review.
+
+- MediaMTX's official security page explicitly recommends verifying each released binary with GitHub CLI `gh attestation verify --repo bluenviron/mediamtx`, in addition to checking the downloaded file against the release's `checksums.sha256` manifest.
+- The v1.21.3 release page identifies the release and its release workflow. A third-party Scoop manifest independently lists the Windows amd64 archive URL and SHA-256 `b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74`. This is useful as a cross-check, but the upstream GitHub Attestation remains the preferred provenance proof.
+- GitHub CLI documents `gh attestation verify <file> --repo <owner/repo>` as validating signed attestation identity and predicate type. Tool Setup v0.2 should either require an already installed, functioning `gh` command and verify the MediaMTX archive before extraction, or explicitly stop with a clear prerequisite message. It must not silently downgrade to checksum-only verification while claiming attestation validation.
+- The pinned FFmpeg-Builds release page confirms the exact 2026-11-14 12:37 release and the selected Windows x86_64 LGPL-labelled static archive identity. The available page evidence does not, by itself, establish a separate independent digest or complete licensing audit. Preserve its release URL, exact asset name, archive SHA-256, build configuration output and any included license/notices. Report checksum provenance honestly and do not call the binary legally verified based only on absence of GPL/nonfree flags.
+
+### Updated Tool Setup v0.2 requirements
+
+1. Keep the fixed workspace root `C:\\JudoReplayKit_Rev9_Dev`; refuse reparse-point or path redirection.
+2. Create a unique staging directory under `C:\\JudoReplayKit_Rev9_Dev\\PoC1` (never beside production or Rev.8). Do not create the final `tools` directory until every required archive passes verification and extraction checks.
+3. If a final `PoC1\\tools` directory already exists, stop without modifying it. If staging fails, preserve the stage directory and write a durable error report naming the exact stage, URL, file and exception; do not delete evidence or leave a partial final tools directory.
+4. Verify MediaMTX using both the upstream release checksum manifest and GitHub Attestation where `gh` is available; otherwise stop before installing it. Record the third-party pinned digest only as an additional cross-check, not as a replacement for the attestation.
+5. Pin FFmpeg to the exact reviewed release and asset; verify its SHA-256 against the selected release manifest/source and record provenance limitations and build configuration. Retain upstream notices/license files.
+6. Extract into staging, verify the expected executable paths, capture version/build configuration, and only then promote the complete staging payload to `PoC1\\tools` with a same-volume rename that fails if the destination exists.
+7. Do not add PATH entries, registry keys, services, firewall rules or scheduled tasks. Do not launch MediaMTX or open listeners.
+8. Treat this as tool preparation only. It does not authorize synthetic streams, live-edge tests, configuration edits or any contact with production/Rev.8.
+
+**Decision remains:** Tool Setup v0.1 is NO-GO. The user has not been instructed to run it. Tool Setup v0.2 must be prepared and reviewed as a separate revision before execution.
+
+### Sources
+
+- MediaMTX security guidance: https://mediamtx.org/docs/misc/security
+- MediaMTX v1.21.3 release: https://github.com/bluenviron/mediamtx/releases/tag/v1.21.3
+- GitHub CLI attestation verification manual: https://cli.github.com/manual/gh_attestation_verify
+- Third-party independent MediaMTX archive hash cross-check: https://github.com/ScoopInstaller/Main/blob/master/bucket/mediamtx.json
+- Pinned FFmpeg-Builds release and archive identity: https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/tag/autobuild-2026-11-14-12-37
