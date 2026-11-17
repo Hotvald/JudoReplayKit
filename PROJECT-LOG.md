@@ -1,6 +1,6 @@
 # JudoReplayKit — Project Log
 
-Last updated: 2026-11-15
+Last updated: 2026-11-17
 
 ## Purpose
 
@@ -4968,4 +4968,40 @@ Before any owner approval is considered, a new review draft must:
 ### Safety
 
 No PowerShell script was run. No archive was downloaded or extracted by this draft. No executable was started. No service, stream, recording, firewall rule, PATH entry, registry setting, production installation, or Rev.8 installation was modified.
+
+
+
+## 2026-11-17 — Tool Setup v0.3 review draft created after Gemini v0.2 review
+
+**Source:** Assistant-authored revision of the delivered v0.2 REVIEW draft, incorporating the user's supplied Gemini static-review findings and an independent reconciliation. This is a source-only change; it has not been executed.
+
+### Delivered artifact
+
+- Filename: `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.3_REVIEW.ps1`
+- SHA-256: `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`
+- Size: 27,934 bytes.
+- Delivered as a standalone review draft. It is not approved to run.
+
+### Changes from v0.2
+
+- Added a narrowly scoped `Remove-OwnedStagingDirectory` cleanup function.
+- The function only accepts a GUID-named `.staging-v0.3-<32 hex chars>` directory directly beneath the pinned Rev.9 tools directory.
+- It refuses cleanup if the staging root is not a normal directory, if a reparse point is detected within staging, or if the canonical path is outside the expected tools directory.
+- Cleanup is attempted in `finally` after both normal completion and catchable errors.
+- After deletion, the script checks that the staging directory is actually absent.
+- A cleanup failure is reported prominently. If there was no earlier setup error, cleanup failure causes the script to fail. If there was an earlier setup error, the original error is preserved and the cleanup failure is separately reported.
+- v0.3 uses distinct download filenames and log names, avoiding overwrite of v0.1/v0.2 downloads and logs.
+- Provenance schema and status text identify v0.3.
+
+### Reconciliation of Gemini's claim
+
+Gemini correctly identified that v0.2 retained staging material on ordinary catchable failures. The v0.3 change addresses that gap for normal completion and errors that PowerShell catches. It does **not** guarantee cleanup after power loss, OS crash, or forced process termination, because PowerShell's `finally` block is not guaranteed to execute in those circumstances. Reparse-point detection is intended to prevent recursive cleanup through unexpected links; a cleanup refusal is surfaced rather than silently ignored.
+
+### Validation and limitations
+
+- Source-level checks confirmed the v0.3 version identifiers, unique v0.3 download/log names, cleanup function, cleanup call in `finally`, and post-delete existence check.
+- No Windows PowerShell 5.1 executable/parser is available in the authoring environment; PowerShell syntax parsing and runtime testing have **not** been performed.
+- The script has not been run. No archives have been downloaded or extracted by it; no executable has been started; no services, streams, firewall, PATH, registry, Production, or Rev.8 have been modified.
+- Gemini's GO for v0.2 does not transfer to v0.3. The exact v0.3 file and SHA-256 require a fresh independent static review.
+- **Status: REVIEW DRAFT — NOT APPROVED TO RUN.**
 
