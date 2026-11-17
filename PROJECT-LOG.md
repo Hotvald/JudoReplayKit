@@ -5183,3 +5183,40 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - FFmpeg build/license status remains a separate unresolved review item.
 
 **Current status:** MediaMTX, FFmpeg and FFprobe version checks passed. Synthetic media functionality test pending user-side execution and output review.
+
+
+## 2026-11-17 — PoC1 synthetic MP4 encode, probe and decode test passed
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Rev.9 development workspace only; synthetic local media test.
+
+### Test artifact
+
+- Path: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\media\\synthetic-5s-640x360.mp4`
+- Size: **1,222,538 bytes**.
+- SHA-256: `0EF0FA65EE38D1EE34DA47A55A57D728357C8E0936E8695EC836FAE07C09C952`.
+
+### Observed results
+
+1. **FFmpeg generation — PASS**
+   - Generated a five-second synthetic test pattern and 1 kHz sine audio.
+   - Video: MPEG-4, 640×360, yuv420p, 30 fps.
+   - Audio: AAC-LC, 48 kHz, mono.
+   - FFmpeg exit code: **0**.
+2. **FFprobe inspection — PASS**
+   - Detected MP4-family container.
+   - Reported duration **5.000000 seconds**.
+   - Reported video codec `mpeg4`, 640×360, frame rate `30/1`.
+   - Reported audio codec `aac`, sample rate `48000`, one channel.
+   - FFprobe exit code: **0**.
+3. **FFmpeg decode — PASS**
+   - Decoded the generated file to the null output.
+   - FFmpeg exit code: **0**.
+
+### Scope and limitations
+
+- This verifies basic local synthetic media generation, metadata inspection and decoding with the installed FFmpeg/FFprobe build.
+- It does not verify MediaMTX server operation, camera ingest, live streaming, continuous recording, playback over HTTP, replay overlay, latency, or referee workflow.
+- The test used synthetic inputs and did not use existing recordings or camera feeds. No MediaMTX server or network stream was involved.
+- The results above are recorded from user-provided console output; no independent inspection of the user's filesystem was performed.
+
+**Current status:** Local FFmpeg/FFprobe synthetic MP4 encode/probe/decode test passed. The generated test file is retained at the path above.
