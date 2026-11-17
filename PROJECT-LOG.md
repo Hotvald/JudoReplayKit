@@ -5029,3 +5029,36 @@ Gemini correctly identified that v0.2 retained staging material on ordinary catc
 
 Gemini's GO is recorded as an independent static-review opinion, not as owner authorization to execute. The exact delivered v0.3 source remains subject to the project's explicit execution approval and a bounded execution plan. Until that approval is given, do not run it. Production and Rev.8 remain protected.
 
+
+
+## 2026-11-17 — Owner authorization and Windows PowerShell preflight for Tool Setup v0.3
+
+**Source:** User authorization and user-provided PowerShell output in the JudoReplayKit project conversation. **Environment:** The user's Windows PC; read-only preflight only. **Execution status at time of this entry: NOT YET RUN.**
+
+### Owner decision
+- The user explicitly authorized: **“GO – kør v0.3”**, limited to the isolated Rev.9 development workspace `C:\\JudoReplayKit_Rev9_Dev`.
+- This is owner authorization to proceed with the v0.3 setup script. It does not authorize changes to Production, Rev.8, services, streams, firewall, PATH, registry, or unrelated locations.
+
+### User-reported preflight results
+- The local script was found at `C:\\Users\\otval\\Downloads\\JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.3_REVIEW.ps1`.
+- SHA-256 reported by the user's machine: `EB2A6FC46B62D3452F519A40CB2A6A95F7DD1C0A2A5F98A18EDC66758A562434`; the user previously reported that it matched the expected hash.
+- Windows PowerShell parser: **PASS — No syntax errors**.
+- PowerShell version: `5.1.19041.6456`.
+- GitHub CLI: `2.104.0`, satisfying the script's previously recorded minimum version requirement of 2.102.0.
+- Rev.9 workspace exists at `C:\\JudoReplayKit_Rev9_Dev` and was reported not to be a reparse point.
+- The four v0.3 download destinations under `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\downloads` were all reported **ABSENT** before execution:
+  - `mediamtx_v1.21.3_windows_amd64.v0.3.zip`
+  - `mediamtx-v1.21.3-checksums.v0.3.sha256`
+  - `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.v0.3.zip`
+  - `ffmpeg-autobuild-2026-11-14-checksums.v0.3.sha256`
+- The existing non-v0.3 download files were observed separately and are not targeted by these four v0.3 destination names.
+- The user's preflight reported that the D: drive was not present at that time. This is an observation of that session only; it does not remove the script's protected-path checks.
+
+### Important hash correction
+The SHA-256 printed by the user's PowerShell output is `eb2a6fc46b62d3452f519a40cb2a6a95f7dd1c0a2a5f98a18edc66758a562434`. Earlier v0.3 log entries contain a differing character sequence (`...2a6e95...`). This addendum records the exact user-reported local hash and preserves the earlier history; do not silently treat the two strings as identical. The exact expected hash should be reconciled against the original delivered artifact before relying on it for execution.
+
+### Execution status and safety
+- The user has authorized the run, but no execution result has yet been supplied in this conversation.
+- No download, extraction, attestation verification, PE inspection, or promotion to `tools\\installed` is recorded as completed.
+- No service, stream, recording, firewall, PATH, registry, Production installation, or Rev.8 installation change is recorded.
+- Record the actual setup output and any failure/success details in a further append-only entry after the user runs the script. Do not describe this preflight or the static Gemini review as a successful runtime test.
