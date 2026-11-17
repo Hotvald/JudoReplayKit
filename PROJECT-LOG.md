@@ -4926,3 +4926,46 @@ Before any owner approval is considered, a new review draft must:
 - The local PoC1 downloads remain unverified and must not be extracted or executed based solely on their presence or timestamps.
 - No production, Rev.8, service, stream, firewall, configuration, registry, or PATH changes were authorized or performed in this review.
 
+## 2026-11-17 — Tool Setup v0.2 review draft recreated and delivered
+
+**Source:** Assistant-authored PowerShell review draft, based on the exact user-supplied v0.1 source, this project log, the current product/tooling decisions, and current GitHub release metadata. This is a source artifact only; it has not been executed.
+
+### Delivered artifact
+
+- Filename: `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.2_REVIEW.ps1`
+- SHA-256: `c9ab9d188cad91268cae44910aa146bd947f3c02768d3a2823a8f04a2eca62f0`
+- The draft was delivered to the user as a downloadable file for independent static review.
+- It was not committed to this repository and has not been run.
+
+### Release metadata rechecked
+
+- MediaMTX v1.21.3 Windows amd64 asset: 28,734,316 bytes; GitHub release API digest `sha256:b2f5246b07cb72961df03b8d5e8cad43dc657bcf3f49a87bb031bdf22721af74`.
+- MediaMTX v1.21.3 `checksums.sha256`: 715 bytes; GitHub release API digest `sha256:7df899490a0941533d55eab3c31048d365f55c9ed519a962394118d609183431`.
+- FFmpeg-Builds tag `autobuild-2026-11-14-12-37`, asset `ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-9.0.zip`: 168,582,040 bytes; GitHub release API digest `sha256:0c229f788a2e33a62ca4ea41d509028aa42df051c27b93a166155d7534db8271`.
+- FFmpeg checksum manifest: 5,728 bytes; GitHub release API digest `sha256:66b81ba75b5a069a7bb7f42eef169f8b32162302d7d43c15a0d83caf5af1a174`.
+- MediaMTX v1.21.3 release workflow source is `.github/workflows/release.yml`; it uses GitHub artifact attestations for the binaries.
+- The script requires GitHub CLI 2.102.0 or later before using `--signer-workflow`, because a published GitHub CLI advisory documents a signer-workflow prefix-matching issue in earlier versions. This is a static policy guard; no local gh version has been checked.
+
+### Draft behavior and explicit limitations
+
+- Pins the Rev.9 workspace and refuses to use a different canonical workspace; checks setup paths for reparse points and protects the Production and Rev.8 locations.
+- Uses unique v0.2 download filenames so pre-existing v0.1 archives/manifests are not overwritten; refuses to overwrite any pre-existing v0.2 destination or partial file.
+- Checks exact GitHub release tag, asset name, asset size, API SHA-256 digest and exact release URL; downloads to a bounded `.part` file and promotes it only after size/digest checks.
+- Parses the publisher checksum manifest using a separate match-result variable and requires exactly one exact filename entry.
+- Verifies MediaMTX attestation against repository and signer workflow, gated on the GitHub CLI version above.
+- Performs ZIP entry preflight for rooted/traversal/invalid Windows paths, reserved names, symlinks/reparse points, unsupported Unix types, duplicate/case-colliding paths, file/directory collisions, entry count and expanded-size limits.
+- Stages extracted files, statically checks x64 PE headers, records per-file hashes and provenance, then promotes the payload to `tools\\installed` only after checks succeed.
+- Does not execute MediaMTX, FFmpeg or FFprobe. FFmpeg build flags/license status remain explicitly unverified; asset naming and checksums do not prove LGPL-only configuration.
+- Does not start services, streams or recordings, or modify firewall, PATH, registry, Production or Rev.8.
+
+### Static-review status and open verification
+
+- The delivered source has been reviewed manually for the previously identified v0.2 issues, including the PowerShell automatic `$Matches` collision, ZIP destination collisions, signer-workflow pinning, and post-promotion reporting.
+- No Windows PowerShell 5.1 parser/runtime is available in the authoring environment, so syntax validation under Windows PowerShell 5.1 has **not** been performed. The script has not been executed; no download, extraction, PE inspection or attestation verification has been run.
+- This is therefore a **REVIEW DRAFT — NOT APPROVED TO RUN**. Gemini should review this exact file and SHA-256. Any finding requires a new revision and new hash before review or approval.
+- The local PoC1 downloads remain untrusted until the script is separately reviewed and an explicitly approved verification run is performed.
+
+### Safety
+
+No PowerShell script was run. No archive was downloaded or extracted by this draft. No executable was started. No service, stream, recording, firewall rule, PATH entry, registry setting, production installation, or Rev.8 installation was modified.
+
