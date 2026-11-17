@@ -5161,3 +5161,25 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - The v0.3 setup remains completed in the isolated Rev.9 workspace as recorded above. No runtime test has been performed, and no downloaded executable has been run.
 
 **Current status:** PowerShell policy restoration verified by the user's new-session output. Proceed to a separate, read-only inspection of installed files before considering runtime validation.
+
+
+## 2026-11-17 — PoC1 runtime version checks passed; synthetic media test authorized
+
+**Source:** User-provided Windows PowerShell 5.1 output and explicit user approval in the JudoReplayKit project conversation. **Environment:** Rev.9 development workspace only.
+
+### Runtime version checks
+
+- MediaMTX executable at `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tools\\installed\\mediamtx\\mediamtx.exe` reported **v1.21.3**, exit code **0**.
+- FFmpeg executable in the installed FFmpeg build directory reported **n9.0.2-57-gd838f9f9ae-20261114**, GCC 16.2.0, exit code **0**. Its printed build configuration includes `--disable-libx264` and `--disable-libx265`; the build configuration is recorded as observed, not as a complete license determination.
+- FFprobe from the same build reported **n9.0.2-57-gd838f9f9ae-20261114**, GCC 16.2.0, exit code **0**.
+- These checks establish that all three executables started and returned version information successfully. They do **not** establish server operation, stream handling, media encoding/decoding, or replay functionality.
+
+### Next test scope
+
+- The user approved proceeding with a short, synthetic local test video in a dedicated Rev.9 PoC1 test-media folder.
+- Planned validation: generate a short test pattern/audio MP4 using FFmpeg; inspect its stream/format metadata using FFprobe; decode it to the null output using FFmpeg.
+- This is a planned test only. At the time of this entry, the test video has **not yet been created**, and media encode/probe/decode results are **not yet available**.
+- The test must stop rather than overwrite an existing test file. It must not use camera feeds, live streams, existing recordings, MediaMTX, Production, or Rev.8.
+- FFmpeg build/license status remains a separate unresolved review item.
+
+**Current status:** MediaMTX, FFmpeg and FFprobe version checks passed. Synthetic media functionality test pending user-side execution and output review.
