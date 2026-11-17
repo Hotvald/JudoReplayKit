@@ -5086,3 +5086,15 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - No setup execution, download, extraction, attestation verification, or installation occurred as a result of that stopped command.
 
 **Current status:** The user's local file hash matches the original recorded v0.3 hash. The owner’s prior GO remains recorded. A corrected guarded launch may now be considered using the original hash `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`. Do not claim runtime success until the user supplies the actual script output.
+
+
+## 2026-11-17 — v0.3 launch blocked by PowerShell execution policy
+
+**Source:** User-provided PowerShell console output.
+
+- The guarded launch recomputed the local SHA-256 and passed the comparison against the original reviewed v0.3 hash `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`.
+- PowerShell then refused to load the script because script execution is disabled on this system (`PSSecurityException`, `UnauthorizedAccess`).
+- The script body was **not executed**. No downloads, extraction, attestation checks, or installation are reported from this attempt.
+- No execution-policy change or bypass was performed.
+
+**Current status:** v0.3 remains not executed. Next action is read-only inspection of effective execution-policy scopes and the file's Authenticode signature/status. Do not bypass or weaken execution policy as a workaround. Any later execution decision requires reviewing those results and the applicable system policy.
