@@ -5149,3 +5149,15 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 **Scope statement:** The script log states it did not change services, streams, firewall rules, PATH entries, registry keys, or production/Rev.8 files. This entry records the script's reported outcome; it is not an independent filesystem audit.
 
 **Current status:** v0.3 setup stage completed. Runtime validation is a separate future stage and must not be described as passed. The temporary `Process`-scope Bypass remains active in the user's current PowerShell session until it is reset or that session is closed. Restore the session policy and verify the effective policy is `Restricted` before proceeding.
+
+
+## 2026-11-17 — Temporary PowerShell policy override confirmed cleared
+
+**Source:** User-provided output from a newly opened Windows PowerShell session after closing the v0.3 execution session.
+
+- Effective execution policy returned to **Restricted**.
+- All six scopes (`MachinePolicy`, `UserPolicy`, `Process`, `CurrentUser`, `LocalMachine`) are again **Undefined**.
+- This confirms that the temporary `Process`-scope `Bypass` used for the approved v0.3 setup did not persist into the new session. No persistent policy scope was changed.
+- The v0.3 setup remains completed in the isolated Rev.9 workspace as recorded above. No runtime test has been performed, and no downloaded executable has been run.
+
+**Current status:** PowerShell policy restoration verified by the user's new-session output. Proceed to a separate, read-only inspection of installed files before considering runtime validation.
