@@ -5072,3 +5072,17 @@ The user's actual local SHA-256 is the authoritative value for the delivered fil
 `eb2a6fc46b62d3452f519a40cb2a6a95f7dd1c0a2a5f98a18edc66758a562434`.
 
 The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcription error in the log/review narrative. The user's earlier preflight explicitly compared the local hash with the expected value `...2a6a95...` and reported **HASH PASS**. This clarification is additive; earlier entries remain preserved as historical records. Use `...2a6a95...` for the delivered v0.3 file.
+
+
+## 2026-11-17 — Correction: v0.3 SHA-256 comparison and execution stop
+
+**Source:** User-provided PowerShell `Get-FileHash` output and reconciliation against the original v0.3 delivery record.
+
+- The actual local file hash is `EB2A6FC46B62D3452F519A40CB2A6E95F7DD1C0A2A5F98A18EDC66758A562434`.
+- This **matches** the original v0.3 delivery/Gemini-review hash recorded earlier in this log: `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`.
+- The prior addendum titled “Clarification of v0.3 SHA-256 transcription” incorrectly transcribed the hash as `...2a6a95...`. That was an assistant transcription error. Its claim that `...2a6a95...` was the authoritative local hash is withdrawn; the historical entry is retained for auditability.
+- The subsequent guarded launch used the incorrectly transcribed expected hash `...2a6a95...`, so it correctly stopped before invoking the script. User output confirms: `STOP: SHA-256 mismatch. Script was NOT executed.`
+- The local file metadata reported by the user is 27,934 bytes, matching the original delivered artifact size.
+- No setup execution, download, extraction, attestation verification, or installation occurred as a result of that stopped command.
+
+**Current status:** The user's local file hash matches the original recorded v0.3 hash. The owner’s prior GO remains recorded. A corrected guarded launch may now be considered using the original hash `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`. Do not claim runtime success until the user supplies the actual script output.
