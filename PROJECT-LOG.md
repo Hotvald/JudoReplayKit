@@ -5098,3 +5098,15 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - No execution-policy change or bypass was performed.
 
 **Current status:** v0.3 remains not executed. Next action is read-only inspection of effective execution-policy scopes and the file's Authenticode signature/status. Do not bypass or weaken execution policy as a workaround. Any later execution decision requires reviewing those results and the applicable system policy.
+
+
+## 2026-11-17 — Read-only diagnosis of v0.3 PowerShell policy block
+
+**Source:** User-provided output from `Get-ExecutionPolicy -List` and `Get-AuthenticodeSignature`.
+
+- All six policy scopes (`MachinePolicy`, `UserPolicy`, `Process`, `CurrentUser`, `LocalMachine`) report `Undefined`.
+- The v0.3 script's Authenticode status is `NotSigned`; no signer certificate is present.
+- On Windows client systems, when every scope is Undefined, the effective default policy is normally `Restricted`. The user has not yet supplied the direct output of `Get-ExecutionPolicy`, so the effective policy value is inferred from the documented default rather than directly observed.
+- The prior launch was blocked before the script body executed. No execution-policy setting was changed.
+
+**Decision/status:** Do not use `-ExecutionPolicy Bypass`, change policy scopes, unblock the file, or alter certificate trust as an improvised workaround. v0.3 remains unexecuted. A trusted code-signing route or another explicitly reviewed deployment method would be needed before execution; neither is currently established.
