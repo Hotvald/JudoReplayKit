@@ -5062,3 +5062,13 @@ The SHA-256 printed by the user's PowerShell output is `eb2a6fc46b62d3452f519a40
 - No download, extraction, attestation verification, PE inspection, or promotion to `tools\\installed` is recorded as completed.
 - No service, stream, recording, firewall, PATH, registry, Production installation, or Rev.8 installation change is recorded.
 - Record the actual setup output and any failure/success details in a further append-only entry after the user runs the script. Do not describe this preflight or the static Gemini review as a successful runtime test.
+
+
+## 2026-11-17 — Clarification of v0.3 SHA-256 transcription
+
+**Source:** Reconciliation of the user's PowerShell `Get-FileHash` output with the preflight record above.
+
+The user's actual local SHA-256 is the authoritative value for the delivered file:
+`eb2a6fc46b62d3452f519a40cb2a6a95f7dd1c0a2a5f98a18edc66758a562434`.
+
+The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcription error in the log/review narrative. The user's earlier preflight explicitly compared the local hash with the expected value `...2a6a95...` and reported **HASH PASS**. This clarification is additive; earlier entries remain preserved as historical records. Use `...2a6a95...` for the delivered v0.3 file.
