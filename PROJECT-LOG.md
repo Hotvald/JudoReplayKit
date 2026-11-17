@@ -5110,3 +5110,15 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - The prior launch was blocked before the script body executed. No execution-policy setting was changed.
 
 **Decision/status:** Do not use `-ExecutionPolicy Bypass`, change policy scopes, unblock the file, or alter certificate trust as an improvised workaround. v0.3 remains unexecuted. A trusted code-signing route or another explicitly reviewed deployment method would be needed before execution; neither is currently established.
+
+
+## 2026-11-17 — Effective PowerShell execution policy confirmed
+
+**Source:** User-provided direct output of `Get-ExecutionPolicy`.
+
+- Effective policy: `Restricted`.
+- This confirms the cause of the v0.3 launch block. With `Restricted`, PowerShell does not run script files.
+- The v0.3 script is also unsigned (`Authenticode` status `NotSigned`), but the effective `Restricted` policy is sufficient to explain the block; the missing signature is not needed to explain this particular refusal.
+- No execution-policy scope was changed. The script body remains unexecuted; no tool downloads or installation occurred.
+
+**Current decision:** Do not bypass or weaken the policy. Before any execution, establish an approved trust/deployment approach for this unsigned script (for example, signing through an already trusted organizational code-signing process, if one exists) and review the exact resulting artifact/hash. Do not assume a self-signed certificate would be trusted or that signing alone changes the effective `Restricted` policy.
