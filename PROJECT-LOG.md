@@ -5122,3 +5122,30 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - No execution-policy scope was changed. The script body remains unexecuted; no tool downloads or installation occurred.
 
 **Current decision:** Do not bypass or weaken the policy. Before any execution, establish an approved trust/deployment approach for this unsigned script (for example, signing through an already trusted organizational code-signing process, if one exists) and review the exact resulting artifact/hash. Do not assume a self-signed certificate would be trusted or that signing alone changes the effective `Restricted` policy.
+
+
+## 2026-11-17 — PoC1 Tool Setup v0.3 completed successfully
+
+**Source:** User-provided PowerShell execution log.
+
+**Execution authorization and guard**
+- The temporary execution-policy change was applied at `Process` scope only. The effective policy was confirmed as `Bypass` in that PowerShell process.
+- The script SHA-256 was rechecked immediately before invocation and matched the reviewed artifact: `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`.
+- Script: `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.3_REVIEW.ps1`.
+- Workspace: `C:\JudoReplayKit_Rev9_Dev`.
+
+**Observed results**
+- MediaMTX v1.21.3 ZIP and publisher checksum manifest downloaded; GitHub release API size/SHA-256 checks passed; publisher manifest entry passed.
+- MediaMTX GitHub attestation verification succeeded for pinned repository `bluenviron/mediamtx` and workflow `.github/workflows/release.yml`.
+- FFmpeg autobuild `autobuild-2026-11-14-12-37` ZIP and publisher checksum manifest downloaded; GitHub release API size/SHA-256 checks passed; publisher manifest entry passed.
+- ZIP preflight passed for both archives (3 entries / 57,376,322 expanded bytes; 48 entries / 411,093,654 expanded bytes).
+- Static PE architecture checks passed for `mediamtx.exe`, `ffmpeg.exe`, and `ffprobe.exe` (AMD64 / `0x8664`).
+- Staged payload promotion completed to `C:\JudoReplayKit_Rev9_Dev\PoC1\tools\installed`.
+- Staging cleanup was reported verified.
+- Script explicitly reported: no downloaded executable was run; runtime behavior and FFmpeg build/license configuration remain untested/unverified.
+
+**Generated log:** `C:\JudoReplayKit_Rev9_Dev\PoC1\logs\PoC1-Tool-Setup-v0.3-20261117-172347.txt`
+
+**Scope statement:** The script log states it did not change services, streams, firewall rules, PATH entries, registry keys, or production/Rev.8 files. This entry records the script's reported outcome; it is not an independent filesystem audit.
+
+**Current status:** v0.3 setup stage completed. Runtime validation is a separate future stage and must not be described as passed. The temporary `Process`-scope Bypass remains active in the user's current PowerShell session until it is reset or that session is closed. Restore the session policy and verify the effective policy is `Restricted` before proceeding.
