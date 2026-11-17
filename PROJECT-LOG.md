@@ -4868,3 +4868,61 @@ A first v0.2 draft was generated in a prior assistant tool session, but the file
 ### Safety
 
 No PowerShell script was run. No archive was extracted. No downloaded executable was started. No services, streams, firewall rules, configuration, registry, production installation, or Rev.8 installation were changed. This entry is an append-only clarification and does not authorize runtime activity.
+
+
+## 2026-11-17 — Independent Gemini static review of Tool Setup v0.1
+
+**Source:** The user supplied Gemini's full static-review response in the JudoReplayKit project conversation. The review was based on the exact v0.1 source pasted by the user, whose locally reported SHA-256 is `D815D8A37A0DC16F7522A31771FB61A3EA7E34BC3BE1713A13432F6B05C6BC9F`. No script execution or runtime testing was performed.
+
+### Gemini's disposition
+
+Gemini independently classifies Tool Setup v0.1 as **NO-GO** and recommends that it must not be run. It identifies the following main gaps:
+
+- The generic 1,024-byte minimum-size check rejects the 715-byte MediaMTX checksum manifest.
+- No staging directory or atomic promotion; the script writes directly into the final tools tree.
+- No explicit ZIP-entry path validation before extraction.
+- No attestation verification.
+- No provenance manifest enumerating extracted files and hashes.
+- Partial downloads and partially extracted output can remain after a failure.
+- The script executes downloaded MediaMTX and FFmpeg binaries for version/build-configuration output.
+- It relies on a hardcoded workspace path and has no second explicit guard against a future accidental path change.
+
+These findings are consistent with the previously recorded v0.1 source review.
+
+### Independent reconciliation and qualifications
+
+The following qualifications are retained rather than adopting every statement in Gemini's response as established fact:
+
+1. **PowerShell 5.1 download memory behavior:** Gemini states that `Invoke-WebRequest -OutFile` necessarily reads the complete download into RAM. That is too categorical and is not established by the supplied source alone. A v0.2 design should use a deliberate, bounded/streaming download implementation appropriate to Windows PowerShell 5.1, but must not describe whole-file RAM buffering as a proven defect without evidence.
+2. **ZIP Slip:** The absence of explicit archive-entry validation is confirmed. However, the supplied evidence does not prove that the specific Windows PowerShell 5.1 `Expand-Archive` implementation in the target environment is exploitable. The design requirement remains: inspect every archive entry, reject rooted/traversal/invalid paths and links, enforce expansion limits, and extract only within a controlled destination.
+3. **Cleanup versus forensic evidence:** Gemini recommends deleting the entire staging directory on failure. The project should not automatically destroy useful diagnostic evidence. A safer failure policy is to prevent promotion, retain a clearly isolated failure log and minimal metadata, and quarantine or remove untrusted archive bytes only under an explicit, documented policy. Any retained staging material must never be mistaken for installed/verified tools.
+4. **Attestation scope:** MediaMTX GitHub Attestations should be verified against the expected repository/workflow identity if the release publishes a compatible attestation. This is an additional provenance check, not a replacement for digest verification. Do not assume the FFmpeg-Builds asset has the same attestation support; fail closed or document the distinct trust model.
+5. **Protected-path guard:** A check that rejects every path on drive D: is broader than necessary and may block unrelated locations. Prefer a strict allowlist requiring the canonical resolved workspace to equal `C:\JudoReplayKit_Rev9_Dev`, combined with explicit rejection of the protected production and Rev.8 paths. Do not rely on a simple prefix match that could have path-boundary ambiguities.
+6. **Provenance:** A v0.2 manifest should record the exact release/repository/tag/asset, publisher/API digests, verification outcomes, executable relative paths, and SHA-256 hashes of the final promoted files. A provenance file alone does not prove that the build is trustworthy.
+
+### Consolidated v0.2 review requirements
+
+Before any owner approval is considered, a new review draft must:
+
+- Be explicitly pinned to the Rev.9 development workspace and refuse unexpected or protected paths after canonical path resolution.
+- Refuse to overwrite an existing final tools directory or pre-existing staging content.
+- Use unique staging and ensure promotion occurs only after all checks succeed.
+- Implement a Windows PowerShell 5.1-compatible download method with explicit size bounds, expected sizes where known, and robust failure detection.
+- Verify release metadata/API digests and exact publisher-manifest entries; reject ambiguous, duplicate, missing, or malformed checksum records.
+- Verify MediaMTX attestation against the expected repository/workflow where supported; record the exact verification result and tool version. Do not claim an independent trust root when checks are controlled by the same publisher/platform.
+- Inspect ZIP entries before extraction; reject absolute paths, drive/UNC paths, traversal components, empty/dot components, symbolic links and unsupported entry types; enforce entry-count and expanded-size limits; prevent duplicate/colliding destinations; verify every resolved target remains inside the extraction root.
+- Avoid executing downloaded binaries during setup. Static PE architecture inspection may be used; runtime version checks belong in a separately approved test.
+- Preserve license/notices and produce a final provenance/hash manifest.
+- On failure, never promote partial content; preserve useful diagnostic evidence without leaving ambiguous partial installation state.
+- Check native process exit codes where any external tool is used; avoid catch-handler behavior that masks the original failure.
+- Include a clear preflight summary and explicit statement of every path and state it may modify.
+- Receive independent static review of the exact delivered source and SHA-256 before any execution is considered.
+
+### Current status
+
+- v0.1 remains **NO-GO**.
+- Gemini's review is an independent static review, not a runtime test.
+- No v0.2 implementation is approved or authorized to run.
+- The local PoC1 downloads remain unverified and must not be extracted or executed based solely on their presence or timestamps.
+- No production, Rev.8, service, stream, firewall, configuration, registry, or PATH changes were authorized or performed in this review.
+
