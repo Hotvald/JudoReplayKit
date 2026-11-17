@@ -5005,3 +5005,27 @@ Gemini correctly identified that v0.2 retained staging material on ordinary catc
 - Gemini's GO for v0.2 does not transfer to v0.3. The exact v0.3 file and SHA-256 require a fresh independent static review.
 - **Status: REVIEW DRAFT — NOT APPROVED TO RUN.**
 
+
+
+## 2026-11-17 — Gemini independent static review of Tool Setup v0.3
+
+**Source:** Full review text supplied by the user. Gemini reports a fresh independent static review of `JudoReplayKit_Rev9_PoC1_Tool_Setup_v0.3_REVIEW.ps1`, SHA-256 `eb2a6fc46b62d3452f519a40cb2a6e95f7dd1c0a2a5f98a18edc66758a562434`.
+
+### Gemini's disposition
+
+- Gemini assigns **GO** for isolated execution in `C:\JudoReplayKit_Rev9_Dev`.
+- It approves the staging cleanup design, PowerShell 5.1 try/catch/finally behavior, workspace isolation, download checks, ZIP checks, attestation and provenance.
+- Gemini correctly notes that `finally` cannot be guaranteed after process termination, power loss or OS crash.
+
+### Independent artifact check and qualifications
+
+- The uploaded v0.3 file was independently hashed in the authoring environment; its SHA-256 matches the exact hash reviewed by Gemini.
+- The delivered file's actual line numbers do **not** match several line references in Gemini's report. For example, the cleanup function is at lines 326–359 (not 196–224), and the actual `finally` block is at lines 472–487 (not 319–335). The ZIP validation is at lines 217–267 (not 135–181). Gemini should be asked to confirm it reviewed the exact hash and explain the line-number discrepancy.
+- The cleanup routine checks that the staging path is under the tools root, has the expected GUID leaf name, and contains no detected reparse points before recursive deletion. This is a meaningful safeguard. However, the prefix-plus-leaf checks alone do not mathematically prove that an arbitrary supplied path is a direct child; in this script `StageRoot` is internally constructed as a direct child. A concurrent local process changing the directory between validation and deletion is also outside what these checks fully prevent.
+- On download failures, a partial `.part` file can remain because the download helper does not remove it. It is not promoted or extracted, and later runs refuse to overwrite it; manual inspection/removal may be needed. This is safe against silent reuse but is not automatic cleanup of every temporary artifact.
+- The script still has not been parsed or executed under Windows PowerShell 5.1 in the target environment. Static review does not establish runtime success, download success, attestation success, archive extraction success, or tool operability.
+
+### Current decision
+
+Gemini's GO is recorded as an independent static-review opinion, not as owner authorization to execute. The exact delivered v0.3 source remains subject to the project's explicit execution approval and a bounded execution plan. Until that approval is given, do not run it. Production and Rev.8 remain protected.
+
