@@ -5356,3 +5356,28 @@ This milestone verifies configuration validation, server startup, authentication
 The downloaded file has **not yet** been independently inspected with FFprobe, decoded with FFmpeg, or visually/audio tested. The retrieval result alone does not establish the exact playable duration, complete media integrity, seeking behavior, playback latency, replay overlay, bookmark workflow, live-stream independence under load, or camera ingest. Basic authentication was tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
 
 **Current status:** PoC1 synthetic RTSP recording, isolated Playback startup, authentication, listing, and media retrieval tests passed. Independent validation and decoding of the retrieved playback file remain the next step.
+
+
+## 2026-11-18 — PoC1 retrieved Playback MP4 probe and full decode passed
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Isolated Rev.9 PoC1 local test workspace. No cameras or external network were used.
+
+### Retrieved file validation
+
+- File: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\mediamtx-local\\playback-output\\jrk-poc1-playback.mp4`.
+- File size reported by PowerShell and FFprobe: **2,215,148 bytes**.
+- FFprobe exit code: **0**.
+- Container: MP4-family (`mov,mp4,m4a,3gp,3g2,mj2`).
+- Duration reported by FFprobe: **19.566656 seconds**.
+- Video: H.264, **640×360**, **30 fps**.
+- Audio: AAC, **48,000 Hz**, mono.
+- FFmpeg full decode to null output exit code: **0**, with no decode errors reported at error log level.
+- The test reported: `PASS: Playback file passed both validation steps.`
+
+### Result and limits
+
+**PASS:** The media returned by the authenticated MediaMTX Playback `/get` endpoint is a non-empty MP4 containing the expected H.264 video and AAC audio streams, and FFmpeg successfully decoded the full file without reported errors. Together with the preceding successful anonymous-denial (401), authenticated-list (200), and authenticated-get (200) checks, this verifies a local synthetic RTSP recording-to-Playback retrieval-and-decode path.
+
+The decoded output was sent to FFmpeg's null sink; this does not establish human-visible audiovisual playback, seek/pause/frame-step behavior, replay latency, overlay on a live picture, bookmark operation, or uninterrupted live streaming/recording under concurrent use. It also does not test physical cameras or external networks. Basic authentication was tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
+
+**Current status:** PoC1 synthetic local RTSP recording, Playback authentication, listing, retrieval, MP4 probing, and full decode tests passed. Next meaningful milestone is a minimal integrated local test app with visible live and replay playback, rather than treating component tests as proof of referee workflow.
