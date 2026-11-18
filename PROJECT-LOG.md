@@ -5334,3 +5334,25 @@ This was a point-in-time read-only check only. It does not test playback authent
 This milestone verifies configuration validation, server startup, authentication behavior, and the listing endpoint only. The returned `/get` URL has **not yet been requested**, and the retrieved playback media has not yet been saved, probed, decoded, or visually inspected. It therefore does not yet prove successful media retrieval or playback, replay latency, replay overlay, bookmarks, simultaneous live broadcast behavior, camera ingest, or the complete referee workflow. Basic authentication is being tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
 
 **Current status:** PoC1 local RTSP recording test passed; isolated Playback startup, authentication, and `/list` test passed. Actual `/get` retrieval and playback-media verification remain the next test.
+
+
+## 2026-11-18 — PoC1 authenticated MediaMTX Playback media retrieval passed
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Isolated Rev.9 PoC1 local test workspace. Playback was requested from the separate loopback-only Playback instance. No cameras or external network were used.
+
+### Retrieval test
+
+- Authenticated GET request was sent to the MediaMTX Playback `/get` endpoint for path `jrk-poc1`, using the start time and duration returned by the preceding successful `/list` request.
+- HTTP response status: **200**.
+- Output file: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\mediamtx-local\\playback-output\\jrk-poc1-playback.mp4`.
+- Reported downloaded file size: **2,215,148 bytes**.
+- The PowerShell test reported: `PASS: Playback media retrieved.`
+- The test used the `poc1-playback` Basic-authenticated account. The password is not recorded here.
+
+### Result and limits
+
+**PASS:** The isolated MediaMTX Playback service successfully returned a non-empty media file over its authenticated local HTTP `/get` endpoint. This extends the prior successful checks: anonymous access was rejected (HTTP 401), authenticated `/list` succeeded (HTTP 200), and authenticated `/get` now succeeded (HTTP 200) with a 2,215,148-byte output file.
+
+The downloaded file has **not yet** been independently inspected with FFprobe, decoded with FFmpeg, or visually/audio tested. The retrieval result alone does not establish the exact playable duration, complete media integrity, seeking behavior, playback latency, replay overlay, bookmark workflow, live-stream independence under load, or camera ingest. Basic authentication was tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
+
+**Current status:** PoC1 synthetic RTSP recording, isolated Playback startup, authentication, listing, and media retrieval tests passed. Independent validation and decoding of the retrieved playback file remain the next step.
