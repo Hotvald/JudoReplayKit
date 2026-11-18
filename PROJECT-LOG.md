@@ -5220,3 +5220,54 @@ The earlier sequence `...2a6e95...` appearing in the v0.3 history was a transcri
 - The results above are recorded from user-provided console output; no independent inspection of the user's filesystem was performed.
 
 **Current status:** Local FFmpeg/FFprobe synthetic MP4 encode/probe/decode test passed. The generated test file is retained at the path above.
+
+## 2026-11-18 — PoC1 local MediaMTX RTSP publish and recording test passed
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Isolated Rev.9 PoC1 test workspace only. No camera or external stream was used.
+
+### Configuration and server
+
+- Test configuration: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\mediamtx-local\\mediamtx-test.yml`.
+- Configuration SHA-256: `72C50CC2E80AECC53DFF866EC8F9FEED72284BFCCBDCFCD4E49F6B6E45E67D4C`.
+- MediaMTX v1.21.3 accepted the configuration with the validation output `configuration file is valid` and exit code 0.
+- The server was started in the foreground. Its console reported MediaMTX v1.21.3 and an RTSP listener on `127.0.0.1:18554` using TCP.
+- A separate PowerShell check observed `127.0.0.1:18554` in `Listen` state, owned by process ID 7820. The test listener was bound to loopback, not an external interface.
+- FFmpeg's encoder listing included `libopenh264`. The recording directory was empty before the synthetic RTSP publish test.
+
+### Synthetic RTSP publish
+
+- FFmpeg build: `n9.0.2-57-gd838f9f9ae-20261114`.
+- Synthetic input: `testsrc2`, 640×360 at 30 fps, plus a 1 kHz sine audio source at 48 kHz.
+- Encoded video: H.264 using `libopenh264`, 640×360, yuv420p, 30 fps.
+- Encoded audio: AAC-LC, 48 kHz, mono.
+- Destination: `rtsp://127.0.0.1:18554/jrk-poc1`, RTSP over TCP.
+- FFmpeg reported 600 frames, output time 20.00 seconds, speed 1.02×, and exit code **0**.
+- OpenH264 emitted two warnings concerning profile selection and bitrate control. They did not prevent this run from completing; the warnings remain worth reviewing separately.
+
+### MediaMTX recording and segment verification
+
+MediaMTX created two MP4 segments under:
+
+`C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\mediamtx-local\\recordings\\jrk-poc1\\`
+
+- Segment 1: `2026-11-18_20-56-43-992669_+0100.mp4`, **1,133,623 bytes**.
+- Segment 2: `2026-11-18_20-56-53-565435_+0100.mp4`, **1,129,030 bytes**.
+- Total: **2,262,653 bytes** across two files.
+
+Both segments were independently inspected with FFprobe:
+- Container: MP4-family (`mov,mp4,m4a,3gp,3g2,mj2`).
+- Video: H.264, 640×360, 30 fps.
+- Audio: AAC, 48 kHz, mono.
+- Segment 1 duration: **10.001666 seconds**; FFprobe exit code **0**.
+- Segment 2 duration: **9.980955 seconds**; FFprobe exit code **0**.
+
+Both files were then fully decoded to FFmpeg's null output. Each decode completed with exit code **0** and no reported decode errors.
+
+### Result and limits
+
+**PASS:** This test demonstrates a local synthetic H.264/AAC RTSP/TCP publish to MediaMTX, creation of two MP4 recording segments, successful metadata inspection, and successful full decoding of both segments.
+
+This does **not** verify physical camera ingest, external-network streaming, simultaneous real camera/live broadcast behavior, replay overlay, replay latency, bookmarks, retention/rotation behavior over time, or the full referee workflow. MediaMTX foreground publisher/recording log lines were not included in the user-provided output; the recording files and their successful probing/decoding are the direct evidence for the result. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were outside the test scope and were not modified.
+
+**Current status:** Isolated PoC1 MediaMTX synthetic RTSP recording and segment decode test passed. FFmpeg/OpenH264 warnings and the separate FFmpeg build/license review remain open.
+
