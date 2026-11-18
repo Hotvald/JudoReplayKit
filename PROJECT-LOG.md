@@ -5302,3 +5302,35 @@ This does **not** verify physical camera ingest, external-network streaming, sim
 This was a point-in-time read-only check only. It does not test playback authentication, playback HTTP endpoints, media retrieval, or playback decoding. The running MediaMTX process was deliberately left untouched. No playback configuration or output directory was created. Production `D:\JudoReplayKit` and Rev.8 `D:\JudoReplayKit_Rev8_Test` were not accessed or modified.
 
 **Current status:** PoC1 recording test artifacts remain present, the RTSP test server is still running on loopback, and port 19996 is available for a separately approved playback-only test.
+
+
+## 2026-11-18 — PoC1 isolated MediaMTX Playback authentication and listing test passed
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Isolated Rev.9 PoC1 local test workspace only. Both MediaMTX instances were bound to loopback. No cameras or external network were used.
+
+### Playback-only configuration and server
+
+- Playback configuration: `C:\\JudoReplayKit_Rev9_Dev\\PoC1\\tests\\mediamtx-local\\mediamtx-playback.yml`.
+- Configuration SHA-256: `860A8283E4F7B5A51AA1C19B4278D6F5D8725BAF7475EAA41D90B3F424CD7F40`.
+- MediaMTX v1.21.3 validated the configuration successfully (`configuration file is valid`).
+- The separate Playback instance started successfully and reported an HTTP listener on `127.0.0.1:19996`.
+- The configuration uses the named account `poc1-playback`, restricts its permission to the `playback` action for path `jrk-poc1`, and does not enable recording on this instance.
+- The existing RTSP/recording instance on `127.0.0.1:18554` was left running and its configuration was not changed.
+- The generated test password is intentionally not recorded in this project log.
+
+### Authentication and Playback API
+
+- An unauthenticated GET request to the Playback `/list` endpoint returned HTTP **401**. The test explicitly reported: `PASS: Anonymous access rejected with HTTP 401.`
+- The same request using Basic authentication for `poc1-playback` returned HTTP **200**. The test explicitly reported: `PASS: Authenticated request succeeded.`
+- The authenticated `/list` response returned one listing entry for path `jrk-poc1`:
+  - Start: `2026-11-18T20:56:43.992669+01:00`.
+  - Duration: **19.545766 seconds**.
+  - The response included a local `/get` URL on `127.0.0.1:19996` for that time range.
+
+### Result and limits
+
+**PASS:** The isolated Playback service starts on loopback, rejects anonymous requests with HTTP 401, accepts the configured named user with HTTP 200, and its `/list` API discovers the recorded media for `jrk-poc1`.
+
+This milestone verifies configuration validation, server startup, authentication behavior, and the listing endpoint only. The returned `/get` URL has **not yet been requested**, and the retrieved playback media has not yet been saved, probed, decoded, or visually inspected. It therefore does not yet prove successful media retrieval or playback, replay latency, replay overlay, bookmarks, simultaneous live broadcast behavior, camera ingest, or the complete referee workflow. Basic authentication is being tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
+
+**Current status:** PoC1 local RTSP recording test passed; isolated Playback startup, authentication, and `/list` test passed. Actual `/get` retrieval and playback-media verification remain the next test.
