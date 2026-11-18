@@ -5271,3 +5271,34 @@ This does **not** verify physical camera ingest, external-network streaming, sim
 
 **Current status:** Isolated PoC1 MediaMTX synthetic RTSP recording and segment decode test passed. FFmpeg/OpenH264 warnings and the separate FFmpeg build/license review remain open.
 
+
+
+## 2026-11-18 — PoC1 read-only MediaMTX process, port and recording-state check
+
+**Source:** User-provided Windows PowerShell 5.1 output. **Environment:** Isolated Rev.9 PoC1 local MediaMTX test only. This was a read-only inspection; no files or processes were modified.
+
+### MediaMTX process and listeners
+
+- One MediaMTX process was found: PID **7820**.
+- Executable: `C:\JudoReplayKit_Rev9_Dev\PoC1\tools\installed\mediamtx\mediamtx.exe`.
+- Command line identifies the active test configuration: `C:\JudoReplayKit_Rev9_Dev\PoC1\tests\mediamtx-local\mediamtx-test.yml`.
+- TCP port **18554** was in `Listen` state on **127.0.0.1**, owned by PID 7820.
+- TCP port **19996** had no listener at the time of inspection. This establishes that the proposed local playback port was free during this check; it does not establish that a playback server has been configured or started.
+
+### Configuration integrity and recordings
+
+- The existing test configuration was present (658 bytes).
+- Its SHA-256 was **72C50CC2E80AECC53DFF866EC8F9FEED72284BFCCBDCFCD4E49F6B6E45E67D4C**, matching the hash recorded for the configuration used in the successful local RTSP recording test.
+- Two recording files were present under `tests\mediamtx-local\recordings\jrk-poc1\`:
+  - `2026-11-18_20-56-43-992669_+0100.mp4` — **1,133,623 bytes**.
+  - `2026-11-18_20-56-53-565435_+0100.mp4` — **1,129,030 bytes**.
+- Total observed recording size: **2,262,653 bytes** across two files, consistent with the prior recording-test results.
+- The proposed `tests\mediamtx-local\playback-output` directory did not exist at the time of inspection.
+
+### Result and limits
+
+**PASS:** The expected MediaMTX process and loopback RTSP listener were still present; the existing test configuration hash matched; both previously verified recording segments remained present; and port 19996 was free during the check.
+
+This was a point-in-time read-only check only. It does not test playback authentication, playback HTTP endpoints, media retrieval, or playback decoding. The running MediaMTX process was deliberately left untouched. No playback configuration or output directory was created. Production `D:\JudoReplayKit` and Rev.8 `D:\JudoReplayKit_Rev8_Test` were not accessed or modified.
+
+**Current status:** PoC1 recording test artifacts remain present, the RTSP test server is still running on loopback, and port 19996 is available for a separately approved playback-only test.
