@@ -5381,3 +5381,116 @@ The downloaded file has **not yet** been independently inspected with FFprobe, d
 The decoded output was sent to FFmpeg's null sink; this does not establish human-visible audiovisual playback, seek/pause/frame-step behavior, replay latency, overlay on a live picture, bookmark operation, or uninterrupted live streaming/recording under concurrent use. It also does not test physical cameras or external networks. Basic authentication was tested over unencrypted HTTP on loopback only; this is not a production security design. Production `D:\\JudoReplayKit` and Rev.8 `D:\\JudoReplayKit_Rev8_Test` were not modified.
 
 **Current status:** PoC1 synthetic local RTSP recording, Playback authentication, listing, retrieval, MP4 probing, and full decode tests passed. Next meaningful milestone is a minimal integrated local test app with visible live and replay playback, rather than treating component tests as proof of referee workflow.
+
+
+
+## 2026-11-23 — MediaMTX upstream delta review: recorder integrity, H.264 recovery, timestamps, WebRTC and observability
+
+**Scope and method:** Compared the latest official MediaMTX release and signed tag with current upstream main; inspected current and tagged MediaMTX source, release notes, recent MediaMTX PRs/issues, mediacommon/gohlslib/gortsplib source and PR state, published security advisories, and the MediaMTX license. The current MediaMTX main snapshot inspected was commit [8c10ac7](https://github.com/bluenviron/mediamtx/commit/8c10ac7dbc466e87a8fe6cac3ecbefc36daaf426), dated 2026-11-22. This was an upstream-only review. No local installation, service, configuration, recording, or protected folder was accessed or changed. No architecture or implementation decision was made.
+
+### Release status
+
+- **Latest official MediaMTX release remains v1.21.4**, published 2026-11-15 13:33 UTC and signed at commit [e65f941](https://github.com/bluenviron/mediamtx/commit/e65f9411a56b19076a0dfde1fb4a59414bdf642c). No later MediaMTX release was present on the official Releases page during this review.
+- Current main contains merged changes through 2026-11-22, but those changes are **not part of v1.21.4** unless separately identified as released. In particular, main still pins mediacommon v2.10.0 and gortsplib v5.7.0.
+- The main-branch MediaMTX LICENSE and v1.21.4 LICENSE have the same Git blob SHA (50bbbd83dda24db053ea0ce1d292a90c290c69ee); MediaMTX remains MIT. This is not a full transitive-dependency license audit.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/releases
+- https://github.com/bluenviron/mediamtx/releases/tag/v1.21.4
+- https://github.com/bluenviron/mediamtx/blob/main/go.mod
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/go.mod
+- https://github.com/bluenviron/mediamtx/blob/main/LICENSE
+
+### HIGH — recorder integrity: new evidence for the existing drift-reset risk
+
+- MediaMTX issue [#6304](https://github.com/bluenviron/mediamtx/issues/6304), related to the already logged [#5550](https://github.com/bluenviron/mediamtx/issues/5550), was updated on 2026-11-23 with additional evidence. The original reporter says a full real-camera RTSP/TCP capture on unmodified v1.21.1/H.264 showed continuous RTP sequence numbers and timestamps, yet **80 received video frames (4 seconds) were absent from the recording across a recorder drift reset** after 80 minutes 56 seconds. The issue also supplies a reproducible emulator that deliberately accelerates timestamp progression relative to delivery.
+- Further issue comments report a production deployment with 85 RTSP cameras on v1.21.2: 75 recorder resets across 47 cameras and 231 seconds of measured gaps over 3 h 40 min. Another report describes repeated resets on v1.21.3 with three Dahua H.265 cameras and a lab comparison of candidate changes. These are contributor-provided measurements, not independently reproduced by this review and not proof that every camera or transport will fail.
+- The current released recorder still has the previously documented 5-second drift tolerance and restart behavior. No released fix was found.
+- Candidate work remains **unmerged**:
+  - [PR #6305](https://github.com/bluenviron/mediamtx/pull/6305) proposes preserving fMP4 samples across local timestamp-estimator corrections, keyframe-aware segment rollover, and collision-safe recording filenames.
+  - [PR #6451](https://github.com/bluenviron/mediamtx/pull/6451) broadens recorder retention handling for track offsets, startup/pre-roll, queue receipt-time evidence and repeated local re-anchoring. Its author reports extensive controlled tests, including a paced 47-minute run, but also records a separate older H.264 decode failure whose origin was not established. These are PR-author results, not released or independently verified JudoReplayKit behavior.
+  - [PR #6516](https://github.com/bluenviron/mediamtx/pull/6516) proposes a configurable recordMaxDrift threshold. Its default remains 5 seconds; it changes the threshold only and explicitly does not change drift measurement or itself preserve samples across a correction.
+- **JudoReplayKit significance:** this strengthens the existing high-priority archive-integrity gate. A live path staying connected is not proof that every received frame reached the recording. The issue remains an upstream risk, not a proven failure in the user's PoC1 synthetic recording.
+
+### HIGH — H.264 loss recovery can terminate readers and split recordings
+
+- MediaMTX issue [#6332](https://github.com/bluenviron/mediamtx/issues/6332) received further reports through 2026-11-20. The reproducible FFmpeg test removes 12 consecutive H.264 frames from a stream with B-frames; RTMP and SRT readers then close with too many reordered frames, while the publisher remains connected. Additional reports describe real SRT loss/blackouts and HLS/recorder consequences, including recorder restarts or segments that fail strict decode after missing reference pictures.
+- Two candidate fixes remain **unmerged**:
+  - [mediacommon PR #394](https://github.com/bluenviron/mediacommon/pull/394) uses H.264 frame_num as evidence of lost reference pictures. Its author documents limits: non-reference picture loss is not detectable this way, and losses exceeding half of MaxFrameNum are ambiguous.
+  - [MediaMTX PR #5714](https://github.com/bluenviron/mediamtx/pull/5714) proposes resetting the H.264/H.265 DTS extractor and waiting for the next random-access frame instead of terminating the affected reader/recorder callback.
+- These proposals are complementary, but neither is a released fix. They do not establish that a future stream will recover without a visible gap or without damaged reference pictures. This is relevant to continuity under camera/network packet loss and should remain distinct from the already-passing synthetic no-loss PoC1 test.
+
+### H.264 interlaced B-frame fix merged upstream, but not released
+
+- MediaMTX issue [#6485](https://github.com/bluenviron/mediamtx/issues/6485) was closed on 2026-11-22 after [mediacommon PR #413](https://github.com/bluenviron/mediacommon/pull/413) merged as [commit 2f90226](https://github.com/bluenviron/mediacommon/commit/2f90226b93765d3e8ef387312b1b44d72983e3a4).
+- The change fixes H.264 **MBAFF frame pictures** with B-frames by parsing the interlaced slice-header fields needed for POC/DTS extraction. The report had shown non-monotonic DTS, reader disconnections and HLS muxer failure. The PR reports focused tests and end-to-end tests with a MediaMTX build containing the change.
+- **Release qualification:** MediaMTX v1.21.4 pins mediacommon v2.10.0, whose tagged DTS extractor does not contain this fix. MediaMTX main still pins mediacommon v2.10.0; no v2.10.1 or later tag was found. Therefore this is merged upstream source, not a fix present in the latest official MediaMTX release. The PR explicitly says PAFF field pictures with B-frames remain unsupported.
+- This is a conditional codec compatibility issue: it matters if an input camera/source supplies interlaced H.264 with B-frames; it does not imply that the user's progressive phone-camera streams are affected.
+
+Sources:
+- https://github.com/bluenviron/mediacommon/commit/2f90226b93765d3e8ef387312b1b44d72983e3a4
+- https://github.com/bluenviron/mediacommon/blob/v2.10.0/pkg/codecs/h264/dts_extractor.go
+- https://github.com/bluenviron/mediacommon/blob/main/pkg/codecs/h264/dts_extractor.go
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/go.mod
+
+### NEW — inter-track timestamp alignment report
+
+- MediaMTX issue [#6535](https://github.com/bluenviron/mediamtx/issues/6535) was opened 2026-11-22 and updated 2026-11-23. Its reproducible RTSP publisher sends audio and ONVIF metadata on one capture clock, but delays metadata delivery by 300 ms while preserving its capture timestamp. With the default useAbsoluteTimestamp=false, the report measures a 300 ms inter-track offset in MediaMTX sender reports; direct publisher reading is aligned.
+- The current main and v1.21.4 source file [internal/protocols/rtsp/to_stream.go](https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/protocols/rtsp/to_stream.go) is unchanged for this path: when useAbsoluteTimestamp is false, each media/format handler uses ntpStateReplace and does not use source.PacketNTP(). With useAbsoluteTimestamp=true, source PacketNTP values are used, but the report says packets are skipped until an RTCP sender report is available.
+- Related [gortsplib PR #1236](https://github.com/bluenviron/gortsplib/pull/1236), opened 2026-11-23 and still open, adds RFC 6051 NTP-64 RTP-header-extension reception so compliant senders can provide absolute packet time from the first packet. MediaMTX still pins gortsplib v5.7.0, so this is not integrated into the current release. It does not by itself change MediaMTX's default useAbsoluteTimestamp=false behavior or prove cross-camera synchronization.
+- **Scope:** the issue demonstrates a potential within-publisher, cross-track A/V/metadata timing problem. It is not evidence of a 300 ms offset between JudoReplayKit's two independent camera paths. It does reinforce that per-track arrival-time estimates must not be treated as a shared capture clock.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/issues/6535
+- https://github.com/bluenviron/mediamtx/blob/v1.21.4/internal/protocols/rtsp/to_stream.go
+- https://github.com/bluenviron/gortsplib/pull/1236
+
+### WebRTC behavior and reader isolation
+
+- [MediaMTX PR #6521](https://github.com/bluenviron/mediamtx/pull/6521) merged 2026-11-20. WebRTC outbound RTP write errors that were previously ignored are now returned through the reader callback; the stated goal is to close a peer that would otherwise remain stuck. This improves failure propagation, but a failed write can now close that peer. It is not evidence of per-reader queue isolation.
+- [MediaMTX PR #6523](https://github.com/bluenviron/mediamtx/pull/6523) merged 2026-11-20. WebRTC egress now copies RTP packets without RTP header extensions or CSRCs because those fields can have different meanings between RTSP and WebRTC and can cause payload-size overflow. This is a packet-header behavior change; it does not change compressed video payloads, and no JudoReplayKit dependency on incoming RTP extensions has been established.
+- [MediaMTX PR #6329](https://github.com/bluenviron/mediamtx/pull/6329) limits reordering/buffering for inbound WebRTC audio tracks to five packets. This is an audio receive-path change, not a video egress queue or a general per-reader queue change.
+- No change to the fundamental per-reader queue/discard semantics or proof of independent WebRTC reader backpressure was found in the merged changes reviewed. The v1.21.4 udpWriteBufferSize control remains a shared socket-buffer setting, not per-reader isolation.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/commit/b619d53c9519f556c86039e741eb388697173225
+- https://github.com/bluenviron/mediamtx/commit/4a9ba5ff887dbf1e8117ef6676afc937d3e8486e
+- https://github.com/bluenviron/mediamtx/commit/e1b04fee6154f7dcaa3e18942b291544331646e8
+
+### Observability and API changes on main (not yet released)
+
+- [PR #6500](https://github.com/bluenviron/mediamtx/pull/6500) merged 2026-11-18. It adds paginated GET /v3/paths/readers/list and GET /v3/paths/readers/get, adds readerCount to path responses, and deprecates the embedded readers field in path list/get responses. This provides a more scalable way to inspect readers, but it does not measure whether a reader is impairing another reader.
+- [PR #6538](https://github.com/bluenviron/mediamtx/pull/6538) merged 2026-11-22 and deprecates per-session/per-connection id labels in metrics; the current main metrics documentation omits those labels and directs detailed inspection to the API. Dashboards that depend on those metric labels may need later adjustment when this change reaches a release.
+- [PR #6501](https://github.com/bluenviron/mediamtx/pull/6501) merged 2026-11-18 adds transportProtocol and transportProfile fields while marking the old RTSP transport/profile fields deprecated. It is not an immediate removal, but API consumers should prefer the new names.
+- These changes are on main and are not part of v1.21.4.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/commit/c9fe5d818e59287a01924b53de3af94aa743271d
+- https://github.com/bluenviron/mediamtx/commit/d3c2da59ec80b69d2e269d487c551efef7d3cd9e
+- https://github.com/bluenviron/mediamtx/commit/8af3510a4608cfc2b49b22781d7c4f4f0c74b8f1
+- https://github.com/bluenviron/mediamtx/blob/main/api/openapi.yaml
+- https://github.com/bluenviron/mediamtx/blob/main/docs/2-features/21-metrics.md
+
+### Security and deployment
+
+- No newly published MediaMTX security advisory after the previously reviewed 2026-11-07 playback authorization advisory was present in the current advisory list. Existing advisory affected ranges and v1.21.4 patch status remain as documented in the 2026-11-16 entry.
+- [PR #6520](https://github.com/bluenviron/mediamtx/pull/6520) merged 2026-11-20 and further sanitizes HTTP Location redirect paths by trimming control characters as well as slash/backslash prefixes, with a regression test for a tab-character bypass. This is a main-branch security hardening change, not yet a v1.21.4 release fix.
+- [PR #6528](https://github.com/bluenviron/mediamtx/pull/6528) is still open. It proposes deprecating apiAllowOrigins, metricsAllowOrigins and pprofAllowOrigins because browser access to these endpoints can expose sensitive data or server control if misconfigured; it recommends using a reverse proxy. No configuration change is made or authorized by this review.
+- Main-branch Docker changes remove armv6 images; the installation documentation continues to describe standalone binaries for Windows/macOS and Docker images for amd64, arm64 and armv7. This does not indicate a Windows x64 deployment break.
+- The MediaMTX LICENSE remains MIT and unchanged as noted above.
+
+Sources:
+- https://github.com/bluenviron/mediamtx/security/advisories
+- https://github.com/bluenviron/mediamtx/security/advisories/GHSA-jh89-m3cv-fmv2
+- https://github.com/bluenviron/mediamtx/commit/ef238fc14ee99b40fcc7f708619f7cf9abff80ba
+- https://github.com/bluenviron/mediamtx/pull/6528
+- https://github.com/bluenviron/mediamtx/commit/573ddfd2b8b467eeddda15f45c940daa9f52f039
+
+### Previously logged items checked for changes
+
+- The previously logged multiple-PPS report [#6269](https://github.com/bluenviron/mediamtx/issues/6269) and fMP4 placeholder-SPS report [#6465](https://github.com/bluenviron/mediamtx/issues/6465) remain open; no released correction was found in this review.
+- The previously logged LL-HLS PART-TARGET issue [#6237](https://github.com/bluenviron/mediamtx/issues/6237) has no newly verified released fix in the material reviewed.
+- The previously logged v1.21.4 udpWriteBufferSize setting, default-zero qualification, and lack of per-reader queue isolation remain unchanged.
+- The existing PoC1 workspace still pins v1.21.3 according to the prior project log. No local files or installations were inspected or changed in this upstream review.
+
+**Overall assessment:** no new official MediaMTX release was found. The most important new evidence is the strengthened recorder-drift/data-loss report and the separate H.264 packet-loss/DTS recovery gap. There are promising upstream PRs, but the recorder and lost-frame recovery proposals remain unmerged. The interlaced MBAFF fix is merged only into mediacommon main and is not in the current released dependency. No implementation or architecture choice is made here.
