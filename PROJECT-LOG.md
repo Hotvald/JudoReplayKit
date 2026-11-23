@@ -5465,9 +5465,9 @@ Sources:
 - These changes are on main and are not part of v1.21.4.
 
 Sources:
-- https://github.com/bluenviron/mediamtx/commit/c9fe5d818e59287a01924b53de3af94aa743271d
+- https://github.com/bluenviron/mediamtx/commit/6d3eb03486a460ebba52b32478668b5970dfb61f
 - https://github.com/bluenviron/mediamtx/commit/d3c2da59ec80b69d2e269d487c551efef7d3cd9e
-- https://github.com/bluenviron/mediamtx/commit/8af3510a4608cfc2b49b22781d7c4f4f0c74b8f1
+- https://github.com/bluenviron/mediamtx/commit/c9fe5d818e59287a01924b53de3af94aa743271d
 - https://github.com/bluenviron/mediamtx/blob/main/api/openapi.yaml
 - https://github.com/bluenviron/mediamtx/blob/main/docs/2-features/21-metrics.md
 
