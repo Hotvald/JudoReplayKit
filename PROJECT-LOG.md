@@ -5393,6 +5393,7 @@ The decoded output was sent to FFmpeg's null sink; this does not establish human
 - **Latest official MediaMTX release remains v1.21.4**, published 2026-11-15 13:33 UTC and signed at commit [e65f941](https://github.com/bluenviron/mediamtx/commit/e65f9411a56b19076a0dfde1fb4a59414bdf642c). No later MediaMTX release was present on the official Releases page during this review.
 - Current main contains merged changes through 2026-11-22, but those changes are **not part of v1.21.4** unless separately identified as released. In particular, main still pins mediacommon v2.10.0 and gortsplib v5.7.0.
 - The main-branch MediaMTX LICENSE and v1.21.4 LICENSE have the same Git blob SHA (50bbbd83dda24db053ea0ce1d292a90c290c69ee); MediaMTX remains MIT. This is not a full transitive-dependency license audit.
+- MediaMTX main and v1.21.4 retain the same Pion ICE v4.4.9 and Pion WebRTC v4.2.26 pins; no Pion dependency-version change relevant to the reviewed reader/queue behavior was found in this interval.
 
 Sources:
 - https://github.com/bluenviron/mediamtx/releases
@@ -5408,7 +5409,7 @@ Sources:
 - The current released recorder still has the previously documented 5-second drift tolerance and restart behavior. No released fix was found.
 - Candidate work remains **unmerged**:
   - [PR #6305](https://github.com/bluenviron/mediamtx/pull/6305) proposes preserving fMP4 samples across local timestamp-estimator corrections, keyframe-aware segment rollover, and collision-safe recording filenames.
-  - [PR #6451](https://github.com/bluenviron/mediamtx/pull/6451) broadens recorder retention handling for track offsets, startup/pre-roll, queue receipt-time evidence and repeated local re-anchoring. Its author reports extensive controlled tests, including a paced 47-minute run, but also records a separate older H.264 decode failure whose origin was not established. These are PR-author results, not released or independently verified JudoReplayKit behavior.
+  - [PR #6451](https://github.com/bluenviron/mediamtx/pull/6451) broadens fMP4 sample-preservation handling for track offsets, startup/pre-roll, queue receipt-time evidence and repeated local re-anchoring. Its author reports extensive controlled tests, including a paced 47-minute run, but also records a separate older H.264 decode failure whose origin was not established. These are PR-author results, not released or independently verified JudoReplayKit behavior.
   - [PR #6516](https://github.com/bluenviron/mediamtx/pull/6516) proposes a configurable recordMaxDrift threshold. Its default remains 5 seconds; it changes the threshold only and explicitly does not change drift measurement or itself preserve samples across a correction.
 - **JudoReplayKit significance:** this strengthens the existing high-priority archive-integrity gate. A live path staying connected is not proof that every received frame reached the recording. The issue remains an upstream risk, not a proven failure in the user's PoC1 synthetic recording.
 
